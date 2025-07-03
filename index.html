@@ -452,50 +452,71 @@
         function splitIntoSentences(text, mode, maxChars) {
             let sentences = [];
             
-            if (mode === 'sentence') {
-                // 문장 기준 분할
-                sentences = text.split(/[.!?。！？]\s*/).filter(s => s.trim().length > 0);
-            } else if (mode === 'length') {
-                // 글자 수 기준 분할
-                const words = text.split(/\s+/);
-                let currentSentence = '';
+            // 한글 텍스트를 글자 수 기준으로 분할하는 함수
+            function splitByLength(text, maxLength) {
+                const result = [];
+                let currentText = text.trim();
                 
-                for (const word of words) {
-                    if ((currentSentence + word).length > maxChars && currentSentence.length > 0) {
-                        sentences.push(currentSentence.trim());
-                        currentSentence = word + ' ';
+                while (currentText.length > 0) {
+                    if (currentText.length <= maxLength) {
+                        result.push(currentText);
+                        break;
+                    }
+                    
+                    // 최대 길이 내에서 적절한 분할점 찾기
+                    let splitIndex = maxLength;
+                    
+                    // 구두점이나 공백에서 분할하려고 시도
+                    const punctuationIndex = currentText.lastIndexOf('.', splitIndex);
+                    const commaIndex = currentText.lastIndexOf(',', splitIndex);
+                    const spaceIndex = currentText.lastIndexOf(' ', splitIndex);
+                    
+                    // 가장 가까운 적절한 분할점 선택
+                    const candidates = [punctuationIndex, commaIndex, spaceIndex].filter(i => i > maxLength * 0.6);
+                    if (candidates.length > 0) {
+                        splitIndex = Math.max(...candidates) + 1;
+                    }
+                    
+                    const part = currentText.substring(0, splitIndex).trim();
+                    if (part.length > 0) {
+                        result.push(part);
+                    }
+                    
+                    currentText = currentText.substring(splitIndex).trim();
+                }
+                
+                return result;
+            }
+            
+            if (mode === 'sentence') {
+                // 문장 기준 분할 (글자 수 제한 적용)
+                const roughSentences = text.split(/[.!?。！？]\s*/).filter(s => s.trim().length > 0);
+                
+                for (const sentence of roughSentences) {
+                    const trimmed = sentence.trim();
+                    if (trimmed.length <= maxChars) {
+                        sentences.push(trimmed);
                     } else {
-                        currentSentence += word + ' ';
+                        // 긴 문장을 글자 수 기준으로 분할
+                        const parts = splitByLength(trimmed, maxChars);
+                        sentences.push(...parts);
                     }
                 }
-                
-                if (currentSentence.trim().length > 0) {
-                    sentences.push(currentSentence.trim());
-                }
+            } else if (mode === 'length') {
+                // 글자 수 기준 분할
+                sentences = splitByLength(text, maxChars);
             } else {
                 // 스마트 분할 (문장 + 글자 수 고려)
                 const roughSentences = text.split(/[.!?。！？]\s*/).filter(s => s.trim().length > 0);
                 
                 for (const sentence of roughSentences) {
-                    if (sentence.length <= maxChars) {
-                        sentences.push(sentence.trim());
+                    const trimmed = sentence.trim();
+                    if (trimmed.length <= maxChars) {
+                        sentences.push(trimmed);
                     } else {
-                        // 긴 문장을 다시 분할
-                        const words = sentence.split(/\s+/);
-                        let currentSentence = '';
-                        
-                        for (const word of words) {
-                            if ((currentSentence + word).length > maxChars && currentSentence.length > 0) {
-                                sentences.push(currentSentence.trim());
-                                currentSentence = word + ' ';
-                            } else {
-                                currentSentence += word + ' ';
-                            }
-                        }
-                        
-                        if (currentSentence.trim().length > 0) {
-                            sentences.push(currentSentence.trim());
-                        }
+                        // 긴 문장을 적절히 분할
+                        const parts = splitByLength(trimmed, maxChars);
+                        sentences.push(...parts);
                     }
                 }
             }
