@@ -654,11 +654,13 @@
                         alert('✅ SRT 파일이 성공적으로 다운로드되었습니다!');
                     }).catch(err => {
                         if (err.name !== 'AbortError') {
+                            console.log('showSaveFilePicker 실패, fallback 사용:', err.message);
                             fallbackDownload(content, filename);
                         }
                     });
                 } else {
                     // 방법 2: 표준 blob 다운로드
+                    console.log('showSaveFilePicker 미지원, fallback 사용');
                     fallbackDownload(content, filename);
                 }
                 
@@ -691,17 +693,15 @@
                 
                 // 더 안정적인 클릭 처리
                 document.body.appendChild(link);
+                link.click();
                 
-                // 약간의 지연을 두고 클릭
+                // 성공 메시지는 한 번만 표시
+                alert('✅ SRT 파일이 성공적으로 다운로드되었습니다!');
+                
+                // 정리 작업
                 setTimeout(() => {
-                    link.click();
-                    alert('✅ SRT 파일이 성공적으로 다운로드되었습니다!');
-                    
-                    // 정리 작업
-                    setTimeout(() => {
-                        document.body.removeChild(link);
-                        URL.revokeObjectURL(url);
-                    }, 200);
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
                 }, 100);
                 
             } catch (error) {
