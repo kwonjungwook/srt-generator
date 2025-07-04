@@ -360,7 +360,7 @@
                     <h3>📖 읽기 설정</h3>
                     <div class="input-group">
                         <label for="readingSpeed">읽기 속도 (자/초)</label>
-                        <input type="number" id="readingSpeed" value="5" min="3" max="8" step="0.5">
+                        <input type="number" id="readingSpeed" value="6.5" min="3" max="8" step="0.5">
                     </div>
                     <div class="input-group">
                         <label for="minDuration">최소 표시 시간 (초)</label>
@@ -561,8 +561,8 @@
             return uniqueBreakPoints;
         }
         
-        // 자연스러운 한국어 분할
-        function naturalKoreanSegment(text, maxLength = 25, minLength = 10) {
+        // 자연스러운 한국어 분할 (기존 타이밍 호환)
+        function naturalKoreanSegment(text, maxLength = 25, minLength = 14) {
             console.log('=== 자연스러운 한국어 분할 시작 ===');
             console.log(`텍스트 길이: ${text.length}자, 최대: ${maxLength}자, 최소: ${minLength}자`);
             
@@ -575,44 +575,58 @@
             while (currentStart < text.length) {
                 let bestEnd = text.length;
                 let bestPriority = 0;
+                let targetLength = Math.min(maxLength, text.length - currentStart);
                 
-                // 현재 위치에서 최대 길이 내의 가장 좋은 분할점 찾기
+                // 목표 길이의 80-100% 범위에서 가장 좋은 분할점 찾기
+                const minTargetLength = Math.max(minLength, Math.floor(targetLength * 0.7));
+                const maxTargetLength = targetLength;
+                
+                // 현재 위치에서 최적 분할점 찾기
                 for (const bp of breakPoints) {
                     if (bp.position <= currentStart) continue;
                     
                     const segmentLength = bp.position - currentStart;
                     
                     // 최대 길이를 초과하면 여기서 중단
-                    if (segmentLength > maxLength) {
+                    if (segmentLength > maxTargetLength) {
                         break;
                     }
                     
-                    // 최소 길이 이상이고 더 좋은 우선순위면 업데이트
-                    if (segmentLength >= minLength && bp.priority > bestPriority) {
-                        bestEnd = bp.position;
-                        bestPriority = bp.priority;
-                    }
-                    
-                    // 문장 끝이면 우선 선택
-                    if (bp.type === 'sentence_end' && segmentLength >= minLength) {
-                        bestEnd = bp.position;
-                        bestPriority = bp.priority;
-                        break;
-                    }
-                }
-                
-                // 적절한 분할점을 찾지 못했으면 강제로 최대 길이에서 자르기
-                if (bestEnd === text.length && (text.length - currentStart) > maxLength) {
-                    const forcedEnd = currentStart + maxLength;
-                    // 가장 가까운 공백 찾기
-                    for (let i = forcedEnd; i > currentStart + minLength; i--) {
-                        if (text[i] === ' ') {
-                            bestEnd = i;
+                    // 목표 범위 내에서 우선순위가 높은 분할점 선택
+                    if (segmentLength >= minTargetLength && segmentLength <= maxTargetLength) {
+                        if (bp.priority > bestPriority || 
+                            (bp.priority === bestPriority && segmentLength > (bestEnd - currentStart))) {
+                            bestEnd = bp.position;
+                            bestPriority = bp.priority;
+                        }
+                        
+                        // 문장 끝이면 즉시 선택 (단, 너무 짧지 않을 때)
+                        if (bp.type === 'sentence_end' && segmentLength >= minLength) {
+                            bestEnd = bp.position;
+                            bestPriority = bp.priority;
                             break;
                         }
                     }
-                    if (bestEnd === text.length) {
-                        bestEnd = forcedEnd;
+                }
+                
+                // 적절한 분할점을 찾지 못했으면 기존 방식과 동일하게 처리
+                if (bestEnd === text.length && (text.length - currentStart) > maxLength) {
+                    // 기존 방식: 단어 경계에서 자르기
+                    const remainingText = text.substring(currentStart);
+                    const words = remainingText.split(/(?<=\s)/g);
+                    let accumulated = '';
+                    
+                    for (const word of words) {
+                        if ((accumulated + word).length > maxLength) {
+                            break;
+                        }
+                        accumulated += word;
+                    }
+                    
+                    if (accumulated.trim()) {
+                        bestEnd = currentStart + accumulated.length;
+                    } else {
+                        bestEnd = currentStart + maxLength;
                     }
                 }
                 
@@ -623,6 +637,9 @@
                 }
                 
                 currentStart = bestEnd;
+                
+                // 무한 루프 방지
+                if (currentStart >= text.length) break;
             }
             
             console.log(`분할 완료: 총 ${segments.length}개 구간`);
@@ -694,8 +711,8 @@
             let sentences;
             
             if (sentenceMode === 'natural') {
-                // 자연스러운 한국어 분할 사용
-                sentences = naturalKoreanSegment(raw, maxCharsPerLine, 12);
+                // 자연스러운 한국어 분할 사용 (기존 방식과 동일한 파라미터)
+                sentences = naturalKoreanSegment(raw, maxCharsPerLine, 14);
                 console.log(`자연 분할 완료: ${sentences.length}개 자막`);
             } else {
                 // 기존 방식 사용
