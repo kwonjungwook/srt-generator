@@ -295,6 +295,28 @@
             display: none;
         }
         
+        .timing-mode {
+            background: #e8f5e8;
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .timing-mode h4 {
+            color: #155724;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .timing-mode p {
+            color: #155724;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
         @media (max-width: 768px) {
             .settings-grid {
                 grid-template-columns: 1fr;
@@ -328,15 +350,20 @@
         </div>
         
         <div class="content">
+            <div class="timing-mode">
+                <h4>⚡ 영상 길이 절대 맞춤 모드</h4>
+                <p>설정한 영상 길이(예: 53분)에 정확히 맞춰 자막을 생성합니다. 읽기 속도는 참고용으로 사용되며, 최종 시간은 영상 길이와 100% 일치합니다.</p>
+            </div>
+            
             <div class="settings-grid">
                 <div class="settings-card">
                     <h3>⏱️ 영상 설정</h3>
                     <div class="input-group">
                         <label for="videoDuration">영상 길이 (분)</label>
-                        <input type="number" id="videoDuration" value="50" min="1" max="300">
+                        <input type="number" id="videoDuration" value="53" min="1" max="300">
                     </div>
                     <div class="input-group">
-                        <label for="readingSpeed">읽기 속도 (자/초)</label>
+                        <label for="readingSpeed">읽기 속도 참고 (자/초)</label>
                         <input type="number" id="readingSpeed" value="5" min="3" max="8" step="0.5">
                     </div>
                 </div>
@@ -411,8 +438,8 @@
                         <div class="stat-label">총 길이</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value" id="coverage">0%</div>
-                        <div class="stat-label">영상 커버리지</div>
+                        <div class="stat-value" id="avgReadingSpeed">0자/초</div>
+                        <div class="stat-label">실제 평균 읽기속도</div>
                     </div>
                 </div>
                 
@@ -431,6 +458,7 @@
 
     <script>
         let generatedSRT = '';
+        let isDownloading = false; // 다운로드 중복 방지
         
         // 글자 수 카운터
         document.getElementById('inputText').addEventListener('input', function() {
@@ -524,7 +552,7 @@
             return sentences.filter(s => s.length > 0);
         }
         
-        // SRT 생성
+        // ⭐ 영상 길이 절대 맞춤 SRT 생성 ⭐
         function generateSRT() {
             const text = document.getElementById('inputText').value.trim();
             const videoDuration = parseFloat(document.getElementById('videoDuration').value) * 60; // 분을 초로 변환
@@ -546,17 +574,39 @@
             let currentTime = 0;
             const subtitles = [];
             
+            // 1️⃣ 전체 자막 수와 간격을 고려한 순수 사용 가능 시간 계산
+            const totalGaps = (sentences.length - 1) * subtitleGap;
+            const availableTime = videoDuration - totalGaps;
+            
+            console.log(`총 영상 길이: ${videoDuration}초`);
+            console.log(`총 간격 시간: ${totalGaps}초 (${sentences.length-1}개 × ${subtitleGap}초)`);
+            console.log(`순수 자막 시간: ${availableTime}초`);
+            
+            // 2️⃣ 전체 글자 수와 읽기 난이도 산출
+            let totalWeightedChars = 0;
+            const charWeights = [];
+            
             for (let i = 0; i < sentences.length; i++) {
                 const sentence = sentences[i];
                 const charCount = sentence.length;
                 
-                // 표시 시간 계산 (읽기 속도 기준, 최소 시간 보장)
-                const calculatedDuration = Math.max(charCount / readingSpeed, minDuration);
+                // 읽기 속도 기반 이상적 시간 계산 (가중치로 사용)
+                const idealDuration = Math.max(charCount / readingSpeed, minDuration);
                 
-                // 영상 길이에 맞춰 조정
-                const remainingTime = videoDuration - currentTime;
-                const remainingSentences = sentences.length - i;
-                const adjustedDuration = Math.min(calculatedDuration, remainingTime / remainingSentences);
+                charWeights.push(idealDuration);
+                totalWeightedChars += idealDuration;
+            }
+            
+            // 3️⃣ 각 자막의 비율에 따라 시간 배분 (영상 길이에 정확히 맞춤)
+            for (let i = 0; i < sentences.length; i++) {
+                const sentence = sentences[i];
+                const weight = charWeights[i];
+                
+                // 비율에 따른 시간 배분
+                let adjustedDuration = (weight / totalWeightedChars) * availableTime;
+                
+                // 최소 표시 시간 보장 (필수적으로 적용)
+                adjustedDuration = Math.max(adjustedDuration, minDuration);
                 
                 const startTime = currentTime;
                 const endTime = currentTime + adjustedDuration;
@@ -566,7 +616,9 @@
                     startTime,
                     endTime,
                     text: sentence,
-                    duration: adjustedDuration
+                    duration: adjustedDuration,
+                    charCount: sentence.length,
+                    actualReadingSpeed: sentence.length / adjustedDuration
                 });
                 
                 srtContent += `${i + 1}\n`;
@@ -574,14 +626,15 @@
                 srtContent += `${sentence}\n\n`;
                 
                 currentTime = endTime + subtitleGap;
-                
-                // 영상 길이를 초과하지 않도록 체크
-                if (currentTime >= videoDuration) {
-                    break;
-                }
             }
             
             generatedSRT = srtContent;
+            
+            // 최종 시간 확인 로그
+            const finalTime = subtitles[subtitles.length - 1]?.endTime || 0;
+            console.log(`최종 자막 종료 시간: ${finalTime}초`);
+            console.log(`설정 영상 길이: ${videoDuration}초`);
+            console.log(`오차: ${Math.abs(finalTime + totalGaps - videoDuration).toFixed(2)}초`);
             
             // 결과 표시
             displayResults(subtitles, videoDuration);
@@ -596,13 +649,17 @@
             const totalSubtitles = subtitles.length;
             const avgDuration = subtitles.reduce((sum, sub) => sum + sub.duration, 0) / totalSubtitles;
             const totalUsedTime = subtitles[subtitles.length - 1]?.endTime || 0;
-            const coverage = (totalUsedTime / videoDuration) * 100;
+            
+            // 실제 평균 읽기 속도 계산
+            const totalChars = subtitles.reduce((sum, sub) => sum + sub.charCount, 0);
+            const totalTime = subtitles.reduce((sum, sub) => sum + sub.duration, 0);
+            const avgReadingSpeed = totalChars / totalTime;
             
             // 통계 업데이트
             document.getElementById('totalSubtitles').textContent = totalSubtitles.toLocaleString();
             document.getElementById('avgDuration').textContent = avgDuration.toFixed(1) + '초';
-            document.getElementById('totalDuration').textContent = Math.floor(totalUsedTime / 60) + '분 ' + Math.floor(totalUsedTime % 60) + '초';
-            document.getElementById('coverage').textContent = coverage.toFixed(1) + '%';
+            document.getElementById('totalDuration').textContent = Math.floor(videoDuration / 60) + '분 ' + Math.floor(videoDuration % 60) + '초';
+            document.getElementById('avgReadingSpeed').textContent = avgReadingSpeed.toFixed(1) + '자/초';
             
             // 미리보기 표시 (전체 내용)
             srtPreview.textContent = generatedSRT;
@@ -615,9 +672,33 @@
         
         // SRT 파일 다운로드
         function downloadSRT() {
+            // 중복 다운로드 방지
+            if (isDownloading) {
+                console.log('다운로드 이미 진행 중...');
+                return;
+            }
+            
             if (!generatedSRT) {
                 alert('먼저 SRT 파일을 생성해주세요.');
                 return;
+            }
+            
+            // 다운로드 버튼 찾기
+            const downloadButton = document.querySelector('.action-btn.primary');
+            const originalText = downloadButton.innerHTML;
+            
+            isDownloading = true; // 다운로드 시작
+            downloadButton.disabled = true;
+            downloadButton.innerHTML = '<span class="btn-icon">⏳</span>다운로드 중...';
+            downloadButton.style.cursor = 'not-allowed';
+            console.log('다운로드 시작...');
+            
+            // 리셋 함수
+            function resetButton() {
+                isDownloading = false;
+                downloadButton.disabled = false;
+                downloadButton.innerHTML = originalText;
+                downloadButton.style.cursor = 'pointer';
             }
             
             try {
@@ -631,7 +712,8 @@
                     String(now.getMonth() + 1).padStart(2, '0') + 
                     String(now.getDate()).padStart(2, '0') + '_' +
                     String(now.getHours()).padStart(2, '0') + 
-                    String(now.getMinutes()).padStart(2, '0');
+                    String(now.getMinutes()).padStart(2, '0') + 
+                    String(now.getSeconds()).padStart(2, '0'); // 초 추가로 중복 방지
                 const filename = `subtitle_${timestamp}.srt`;
                 
                 // 다양한 브라우저 지원을 위한 다중 시도
@@ -657,16 +739,20 @@
                             console.log('showSaveFilePicker 실패, fallback 사용:', err.message);
                             fallbackDownload(content, filename);
                         }
+                    }).finally(() => {
+                        resetButton(); // 버튼 리셋
                     });
                 } else {
                     // 방법 2: 표준 blob 다운로드
                     console.log('showSaveFilePicker 미지원, fallback 사용');
                     fallbackDownload(content, filename);
+                    resetButton(); // 버튼 리셋
                 }
                 
             } catch (error) {
                 console.error('다운로드 오류:', error);
                 alert('❌ 다운로드에 실패했습니다. "📋 텍스트 복사" 버튼을 사용해주세요.');
+                resetButton(); // 에러 시에도 리셋
             }
         }
         
