@@ -296,15 +296,15 @@
         }
         
         .timing-mode {
-            background: #e8f5e8;
-            border: 2px solid #28a745;
+            background: #e8f4f8;
+            border: 2px solid #17a2b8;
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 20px;
         }
         
         .timing-mode h4 {
-            color: #155724;
+            color: #0c5460;
             margin-bottom: 10px;
             display: flex;
             align-items: center;
@@ -312,7 +312,7 @@
         }
         
         .timing-mode p {
-            color: #155724;
+            color: #0c5460;
             font-size: 14px;
             line-height: 1.4;
         }
@@ -346,25 +346,25 @@
     <div class="container">
         <div class="header">
             <h1>🎬 한글 텍스트 SRT 자막 생성기</h1>
-            <p>대량의 한글 텍스트를 영상 길이에 맞는 SRT 자막 파일로 자동 변환</p>
+            <p>대량의 한글 텍스트를 자연스러운 문장 단위로 SRT 자막 파일 변환</p>
         </div>
         
         <div class="content">
             <div class="timing-mode">
-                <h4>⚡ 영상 길이 절대 맞춤 모드</h4>
-                <p>설정한 영상 길이(예: 53분)에 정확히 맞춰 자막을 생성합니다. 읽기 속도는 참고용으로 사용되며, 최종 시간은 영상 길이와 100% 일치합니다.</p>
+                <h4>📚 읽기 속도 기준 모드</h4>
+                <p>설정한 읽기 속도에 맞춰 자막을 생성하며, 문장의 자연스러운 끝맺음을 우선으로 합니다. 의미 단위로 끊어져 자막 작업이 편리합니다.</p>
             </div>
             
             <div class="settings-grid">
                 <div class="settings-card">
-                    <h3>⏱️ 영상 설정</h3>
+                    <h3>📖 읽기 설정</h3>
                     <div class="input-group">
-                        <label for="videoDuration">영상 길이 (분)</label>
-                        <input type="number" id="videoDuration" value="53" min="1" max="300">
+                        <label for="readingSpeed">읽기 속도 (자/초)</label>
+                        <input type="number" id="readingSpeed" value="5" min="3" max="8" step="0.5">
                     </div>
                     <div class="input-group">
-                        <label for="readingSpeed">읽기 속도 참고 (자/초)</label>
-                        <input type="number" id="readingSpeed" value="5" min="3" max="8" step="0.5">
+                        <label for="minDuration">최소 표시 시간 (초)</label>
+                        <input type="number" id="minDuration" value="2" min="1" max="5" step="0.5">
                     </div>
                 </div>
                 
@@ -381,18 +381,18 @@
                 </div>
                 
                 <div class="settings-card">
-                    <h3>🎯 고급 설정</h3>
+                    <h3>🎯 문장 분할</h3>
                     <div class="input-group">
-                        <label for="sentenceMode">문장 분할 방식</label>
+                        <label for="sentenceMode">분할 방식</label>
                         <select id="sentenceMode">
-                            <option value="smart">스마트 분할</option>
-                            <option value="length">글자 수 기준</option>
-                            <option value="sentence">문장 기준</option>
+                            <option value="smart">스마트 분할 (권장)</option>
+                            <option value="sentence">문장 우선</option>
+                            <option value="length">글자 수 우선</option>
                         </select>
                     </div>
                     <div class="input-group">
-                        <label for="minDuration">최소 표시 시간 (초)</label>
-                        <input type="number" id="minDuration" value="2" min="1" max="5" step="0.5">
+                        <label for="maxDuration">최대 표시 시간 (초)</label>
+                        <input type="number" id="maxDuration" value="8" min="5" max="15" step="0.5">
                     </div>
                 </div>
             </div>
@@ -438,8 +438,8 @@
                         <div class="stat-label">총 길이</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-value" id="avgReadingSpeed">0자/초</div>
-                        <div class="stat-label">실제 평균 읽기속도</div>
+                        <div class="stat-value" id="actualReadingSpeed">0자/초</div>
+                        <div class="stat-label">실제 읽기속도</div>
                     </div>
                 </div>
                 
@@ -458,7 +458,7 @@
 
     <script>
         let generatedSRT = '';
-        let isDownloading = false; // 다운로드 중복 방지
+        let isDownloading = false;
         
         // 글자 수 카운터
         document.getElementById('inputText').addEventListener('input', function() {
@@ -476,12 +476,18 @@
             return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
         }
         
-        // 텍스트를 문장으로 분할
+        // 자연스러운 문장 분할
         function splitIntoSentences(text, mode, maxChars) {
             let sentences = [];
             
-            // 한글 텍스트를 글자 수 기준으로 분할하는 함수
-            function splitByLength(text, maxLength) {
+            // 한글 문장 부호와 접속사 패턴
+            const sentenceEnders = /[.!?。！？]/;
+            const strongSeparators = /[.!?。！？]\s*/;
+            const commaSeparators = /[,，、]\s*/;
+            const connectors = /(그런데|하지만|그러나|또한|그리고|따라서|그래서|예를 들어|즉|다시 말해|결국|마지막으로|문제는|정말|근데|원래|보통|그런데|다행히도|그 덕분에|모든 것이|그런데|하필이면|하필|웬만하면)\s*/;
+            
+            // 자연스러운 문장 분할
+            function smartSplit(text, maxLength) {
                 const result = [];
                 let currentText = text.trim();
                 
@@ -491,18 +497,95 @@
                         break;
                     }
                     
-                    // 최대 길이 내에서 적절한 분할점 찾기
                     let splitIndex = maxLength;
+                    let foundNaturalBreak = false;
                     
-                    // 구두점이나 공백에서 분할하려고 시도
-                    const punctuationIndex = currentText.lastIndexOf('.', splitIndex);
-                    const commaIndex = currentText.lastIndexOf(',', splitIndex);
-                    const spaceIndex = currentText.lastIndexOf(' ', splitIndex);
+                    // 1순위: 문장 끝 (., !, ?, 。, ！, ？) - 범위를 더 넓게
+                    for (let i = Math.max(maxLength * 0.4, 8); i <= Math.min(maxLength * 1.2, currentText.length - 1); i++) {
+                        if (sentenceEnders.test(currentText[i])) {
+                            // 문장 끝 다음에 공백이나 줄바꿈이 있는지 확인
+                            if (i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
+                                splitIndex = i + 1;
+                                foundNaturalBreak = true;
+                                break;
+                            } else if (i + 1 === currentText.length) {
+                                splitIndex = i + 1;
+                                foundNaturalBreak = true;
+                                break;
+                            }
+                        }
+                    }
                     
-                    // 가장 가까운 적절한 분할점 선택
-                    const candidates = [punctuationIndex, commaIndex, spaceIndex].filter(i => i > maxLength * 0.6);
-                    if (candidates.length > 0) {
-                        splitIndex = Math.max(...candidates) + 1;
+                    // 2순위: 쉼표 분할 (더 적극적으로)
+                    if (!foundNaturalBreak) {
+                        // 이상적인 길이 근처에서 쉼표 찾기
+                        const idealRange = { start: maxLength * 0.5, end: maxLength * 1.1 };
+                        
+                        for (let i = Math.floor(idealRange.end); i >= Math.floor(idealRange.start); i--) {
+                            if (i < currentText.length && currentText[i] === ',') {
+                                // 쉼표 다음에 공백이 있는지 확인
+                                if (i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
+                                    splitIndex = i + 1;
+                                    foundNaturalBreak = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 3순위: 접속사나 연결어 앞에서 분할
+                    if (!foundNaturalBreak) {
+                        const searchStart = Math.max(maxLength * 0.4, 5);
+                        const searchEnd = Math.min(maxLength * 1.2, currentText.length);
+                        const searchText = currentText.substring(searchStart, searchEnd);
+                        const connectorMatch = searchText.match(connectors);
+                        
+                        if (connectorMatch) {
+                            const connectorPos = currentText.indexOf(connectorMatch[0], searchStart);
+                            if (connectorPos !== -1 && connectorPos <= maxLength * 1.2) {
+                                splitIndex = connectorPos;
+                                foundNaturalBreak = true;
+                            }
+                        }
+                    }
+                    
+                    // 4순위: 다른 구두점들 (、 등)
+                    if (!foundNaturalBreak) {
+                        for (let i = Math.min(maxLength * 1.1, currentText.length - 1); i >= maxLength * 0.5; i--) {
+                            if (/[、，]/.test(currentText[i])) {
+                                splitIndex = i + 1;
+                                foundNaturalBreak = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 5순위: 공백 (의미 단위 고려)
+                    if (!foundNaturalBreak) {
+                        // 이상적인 길이 근처의 공백 찾기
+                        for (let i = Math.min(maxLength * 0.9, currentText.length - 1); i >= maxLength * 0.5; i--) {
+                            if (/\s/.test(currentText[i])) {
+                                // 공백 앞뒤 단어가 의미적으로 분리 가능한지 확인
+                                const beforeWord = currentText.substring(Math.max(0, i-5), i).trim();
+                                const afterWord = currentText.substring(i+1, Math.min(currentText.length, i+6)).trim();
+                                
+                                // 조사나 어미가 아닌 경우에만 분할
+                                if (!/(은|는|이|가|을|를|에|에서|와|과|의|로|으로)$/.test(beforeWord) && 
+                                    !/(이|가|을|를|에|에서)/.test(afterWord.substring(0, 2))) {
+                                    splitIndex = i;
+                                    foundNaturalBreak = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 마지막: 강제 분할 (단어가 잘리지 않도록)
+                    if (!foundNaturalBreak) {
+                        // 단어 중간에서 자르지 않도록 뒤로 이동
+                        while (splitIndex > maxLength * 0.7 && splitIndex > 0 && !/\s/.test(currentText[splitIndex-1])) {
+                            splitIndex--;
+                        }
                     }
                     
                     const part = currentText.substring(0, splitIndex).trim();
@@ -513,37 +596,37 @@
                     currentText = currentText.substring(splitIndex).trim();
                 }
                 
-                return result;
+                return result.filter(s => s.length > 0);
             }
             
             if (mode === 'sentence') {
-                // 문장 기준 분할 (글자 수 제한 적용)
-                const roughSentences = text.split(/[.!?。！？]\s*/).filter(s => s.trim().length > 0);
+                // 문장 우선: 완전한 문장을 우선으로 분할
+                const roughSentences = text.split(strongSeparators).filter(s => s.trim().length > 0);
                 
                 for (const sentence of roughSentences) {
                     const trimmed = sentence.trim();
                     if (trimmed.length <= maxChars) {
                         sentences.push(trimmed);
                     } else {
-                        // 긴 문장을 글자 수 기준으로 분할
-                        const parts = splitByLength(trimmed, maxChars);
+                        // 긴 문장은 스마트 분할
+                        const parts = smartSplit(trimmed, maxChars);
                         sentences.push(...parts);
                     }
                 }
             } else if (mode === 'length') {
-                // 글자 수 기준 분할
-                sentences = splitByLength(text, maxChars);
+                // 글자 수 우선: 설정된 길이를 엄격히 준수
+                sentences = smartSplit(text, maxChars);
             } else {
-                // 스마트 분할 (문장 + 글자 수 고려)
-                const roughSentences = text.split(/[.!?。！？]\s*/).filter(s => s.trim().length > 0);
+                // 스마트 분할 (권장): 문장과 길이의 균형
+                const roughSentences = text.split(strongSeparators).filter(s => s.trim().length > 0);
                 
                 for (const sentence of roughSentences) {
                     const trimmed = sentence.trim();
-                    if (trimmed.length <= maxChars) {
+                    if (trimmed.length <= maxChars * 1.2) { // 약간의 여유 허용
                         sentences.push(trimmed);
                     } else {
-                        // 긴 문장을 적절히 분할
-                        const parts = splitByLength(trimmed, maxChars);
+                        // 너무 긴 문장은 스마트 분할
+                        const parts = smartSplit(trimmed, maxChars);
                         sentences.push(...parts);
                     }
                 }
@@ -552,15 +635,15 @@
             return sentences.filter(s => s.length > 0);
         }
         
-        // ⭐ 영상 길이 절대 맞춤 SRT 생성 ⭐
+        // 읽기 속도 기준 SRT 생성
         function generateSRT() {
             const text = document.getElementById('inputText').value.trim();
-            const videoDuration = parseFloat(document.getElementById('videoDuration').value) * 60; // 분을 초로 변환
             const readingSpeed = parseFloat(document.getElementById('readingSpeed').value);
             const maxCharsPerLine = parseInt(document.getElementById('maxCharsPerLine').value);
             const subtitleGap = parseFloat(document.getElementById('subtitleGap').value);
             const sentenceMode = document.getElementById('sentenceMode').value;
             const minDuration = parseFloat(document.getElementById('minDuration').value);
+            const maxDuration = parseFloat(document.getElementById('maxDuration').value);
             
             if (!text) {
                 alert('텍스트를 입력해주세요.');
@@ -574,51 +657,37 @@
             let currentTime = 0;
             const subtitles = [];
             
-            // 1️⃣ 전체 자막 수와 간격을 고려한 순수 사용 가능 시간 계산
-            const totalGaps = (sentences.length - 1) * subtitleGap;
-            const availableTime = videoDuration - totalGaps;
+            console.log(`총 ${sentences.length}개 자막 생성 시작`);
+            console.log(`읽기 속도: ${readingSpeed}자/초`);
             
-            console.log(`총 영상 길이: ${videoDuration}초`);
-            console.log(`총 간격 시간: ${totalGaps}초 (${sentences.length-1}개 × ${subtitleGap}초)`);
-            console.log(`순수 자막 시간: ${availableTime}초`);
-            
-            // 2️⃣ 전체 글자 수와 읽기 난이도 산출
-            let totalWeightedChars = 0;
-            const charWeights = [];
-            
+            // 각 문장에 대해 읽기 속도 기준으로 시간 계산
             for (let i = 0; i < sentences.length; i++) {
                 const sentence = sentences[i];
                 const charCount = sentence.length;
                 
-                // 읽기 속도 기반 이상적 시간 계산 (가중치로 사용)
-                const idealDuration = Math.max(charCount / readingSpeed, minDuration);
+                // 읽기 속도 기준 기본 시간 계산
+                let duration = charCount / readingSpeed;
                 
-                charWeights.push(idealDuration);
-                totalWeightedChars += idealDuration;
-            }
-            
-            // 3️⃣ 각 자막의 비율에 따라 시간 배분 (영상 길이에 정확히 맞춤)
-            for (let i = 0; i < sentences.length; i++) {
-                const sentence = sentences[i];
-                const weight = charWeights[i];
+                // 최소/최대 시간 적용
+                duration = Math.max(duration, minDuration);
+                duration = Math.min(duration, maxDuration);
                 
-                // 비율에 따른 시간 배분
-                let adjustedDuration = (weight / totalWeightedChars) * availableTime;
-                
-                // 최소 표시 시간 보장 (필수적으로 적용)
-                adjustedDuration = Math.max(adjustedDuration, minDuration);
+                // 짧은 문장은 조금 더 길게 표시
+                if (charCount <= 10) {
+                    duration = Math.max(duration, minDuration + 0.5);
+                }
                 
                 const startTime = currentTime;
-                const endTime = currentTime + adjustedDuration;
+                const endTime = currentTime + duration;
                 
                 subtitles.push({
                     index: i + 1,
                     startTime,
                     endTime,
                     text: sentence,
-                    duration: adjustedDuration,
-                    charCount: sentence.length,
-                    actualReadingSpeed: sentence.length / adjustedDuration
+                    duration,
+                    charCount,
+                    actualReadingSpeed: charCount / duration
                 });
                 
                 srtContent += `${i + 1}\n`;
@@ -626,53 +695,47 @@
                 srtContent += `${sentence}\n\n`;
                 
                 currentTime = endTime + subtitleGap;
+                
+                console.log(`자막 ${i + 1}: "${sentence.substring(0, 20)}..." (${charCount}자, ${duration.toFixed(1)}초)`);
             }
             
             generatedSRT = srtContent;
             
-            // 최종 시간 확인 로그
-            const finalTime = subtitles[subtitles.length - 1]?.endTime || 0;
-            console.log(`최종 자막 종료 시간: ${finalTime}초`);
-            console.log(`설정 영상 길이: ${videoDuration}초`);
-            console.log(`오차: ${Math.abs(finalTime + totalGaps - videoDuration).toFixed(2)}초`);
-            
             // 결과 표시
-            displayResults(subtitles, videoDuration);
+            displayResults(subtitles);
         }
         
         // 결과 표시
-        function displayResults(subtitles, videoDuration) {
+        function displayResults(subtitles) {
             const resultContainer = document.getElementById('resultContainer');
             const srtPreview = document.getElementById('srtPreview');
             
             // 통계 계산
             const totalSubtitles = subtitles.length;
-            const avgDuration = subtitles.reduce((sum, sub) => sum + sub.duration, 0) / totalSubtitles;
-            const totalUsedTime = subtitles[subtitles.length - 1]?.endTime || 0;
-            
-            // 실제 평균 읽기 속도 계산
-            const totalChars = subtitles.reduce((sum, sub) => sum + sub.charCount, 0);
             const totalTime = subtitles.reduce((sum, sub) => sum + sub.duration, 0);
-            const avgReadingSpeed = totalChars / totalTime;
+            const avgDuration = totalTime / totalSubtitles;
+            const totalChars = subtitles.reduce((sum, sub) => sum + sub.charCount, 0);
+            const actualReadingSpeed = totalChars / totalTime;
             
             // 통계 업데이트
             document.getElementById('totalSubtitles').textContent = totalSubtitles.toLocaleString();
             document.getElementById('avgDuration').textContent = avgDuration.toFixed(1) + '초';
-            document.getElementById('totalDuration').textContent = Math.floor(videoDuration / 60) + '분 ' + Math.floor(videoDuration % 60) + '초';
-            document.getElementById('avgReadingSpeed').textContent = avgReadingSpeed.toFixed(1) + '자/초';
+            document.getElementById('totalDuration').textContent = Math.floor(totalTime / 60) + '분 ' + Math.floor(totalTime % 60) + '초';
+            document.getElementById('actualReadingSpeed').textContent = actualReadingSpeed.toFixed(1) + '자/초';
             
-            // 미리보기 표시 (전체 내용)
+            // 미리보기 표시
             srtPreview.textContent = generatedSRT;
             srtPreview.style.userSelect = 'text';
             srtPreview.style.cursor = 'text';
             
             resultContainer.classList.remove('hidden');
             resultContainer.scrollIntoView({ behavior: 'smooth' });
+            
+            console.log(`생성 완료: 총 ${totalSubtitles}개 자막, ${Math.floor(totalTime/60)}분 ${Math.floor(totalTime%60)}초`);
         }
         
         // SRT 파일 다운로드
         function downloadSRT() {
-            // 중복 다운로드 방지
             if (isDownloading) {
                 console.log('다운로드 이미 진행 중...');
                 return;
@@ -683,17 +746,15 @@
                 return;
             }
             
-            // 다운로드 버튼 찾기
             const downloadButton = document.querySelector('.action-btn.primary');
             const originalText = downloadButton.innerHTML;
             
-            isDownloading = true; // 다운로드 시작
+            isDownloading = true;
             downloadButton.disabled = true;
             downloadButton.innerHTML = '<span class="btn-icon">⏳</span>다운로드 중...';
             downloadButton.style.cursor = 'not-allowed';
             console.log('다운로드 시작...');
             
-            // 리셋 함수
             function resetButton() {
                 isDownloading = false;
                 downloadButton.disabled = false;
@@ -702,23 +763,18 @@
             }
             
             try {
-                // 한글 인코딩을 위한 UTF-8 BOM 추가
                 const bom = '\uFEFF';
                 const content = bom + generatedSRT;
                 
-                // 현재 시간으로 파일명 생성
                 const now = new Date();
                 const timestamp = now.getFullYear() + 
                     String(now.getMonth() + 1).padStart(2, '0') + 
                     String(now.getDate()).padStart(2, '0') + '_' +
                     String(now.getHours()).padStart(2, '0') + 
                     String(now.getMinutes()).padStart(2, '0') + 
-                    String(now.getSeconds()).padStart(2, '0'); // 초 추가로 중복 방지
+                    String(now.getSeconds()).padStart(2, '0');
                 const filename = `subtitle_${timestamp}.srt`;
                 
-                // 다양한 브라우저 지원을 위한 다중 시도
-                
-                // 방법 1: 모던 브라우저 (Chrome, Firefox, Safari)
                 if (typeof window.showSaveFilePicker === 'function') {
                     window.showSaveFilePicker({
                         suggestedName: filename,
@@ -740,51 +796,44 @@
                             fallbackDownload(content, filename);
                         }
                     }).finally(() => {
-                        resetButton(); // 버튼 리셋
+                        resetButton();
                     });
                 } else {
-                    // 방법 2: 표준 blob 다운로드
                     console.log('showSaveFilePicker 미지원, fallback 사용');
                     fallbackDownload(content, filename);
-                    resetButton(); // 버튼 리셋
+                    resetButton();
                 }
                 
             } catch (error) {
                 console.error('다운로드 오류:', error);
                 alert('❌ 다운로드에 실패했습니다. "📋 텍스트 복사" 버튼을 사용해주세요.');
-                resetButton(); // 에러 시에도 리셋
+                resetButton();
             }
         }
         
-        // 대체 다운로드 방법
         function fallbackDownload(content, filename) {
             try {
                 const blob = new Blob([content], { 
                     type: 'text/plain;charset=utf-8' 
                 });
                 
-                // IE/Edge 지원
                 if (window.navigator && window.navigator.msSaveOrOpenBlob) {
                     window.navigator.msSaveOrOpenBlob(blob, filename);
                     alert('✅ SRT 파일이 성공적으로 다운로드되었습니다!');
                     return;
                 }
                 
-                // 표준 방법
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
                 link.download = filename;
                 link.style.display = 'none';
                 
-                // 더 안정적인 클릭 처리
                 document.body.appendChild(link);
                 link.click();
                 
-                // 성공 메시지는 한 번만 표시
                 alert('✅ SRT 파일이 성공적으로 다운로드되었습니다!');
                 
-                // 정리 작업
                 setTimeout(() => {
                     document.body.removeChild(link);
                     URL.revokeObjectURL(url);
@@ -803,7 +852,6 @@
                 return;
             }
             
-            // 모던 브라우저의 Clipboard API 사용
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(generatedSRT).then(() => {
                     alert('✅ SRT 내용이 클립보드에 복사되었습니다!\n\n📝 사용 방법:\n1️⃣ 메모장 열기\n2️⃣ Ctrl+V로 붙여넣기\n3️⃣ "subtitle.srt"로 저장');
@@ -812,12 +860,10 @@
                     fallbackCopy();
                 });
             } else {
-                // 구형 브라우저 대체 방법
                 fallbackCopy();
             }
         }
         
-        // 대체 복사 방법
         function fallbackCopy() {
             const textArea = document.createElement('textarea');
             textArea.value = generatedSRT;
