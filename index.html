@@ -376,7 +376,7 @@
                     </div>
                     <div class="input-group">
                         <label for="subtitleGap">자막 간 간격 (초)</label>
-                        <input type="number" id="subtitleGap" value="0" min="0" max="2" step="0.1">
+                        <input type="number" id="subtitleGap" value="0.5" min="0" max="2" step="0.1">
                     </div>
                 </div>
                 
@@ -562,7 +562,7 @@
         }
         
         // 자연스러운 한국어 분할 (기존 타이밍 호환)
-        function naturalKoreanSegment(text, maxLength = 25, minLength = 14) {
+        function naturalKoreanSegment(text, maxLength = 25, minLength = 10) {
             console.log('=== 자연스러운 한국어 분할 시작 ===');
             console.log(`텍스트 길이: ${text.length}자, 최대: ${maxLength}자, 최소: ${minLength}자`);
             
@@ -575,43 +575,58 @@
             while (currentStart < text.length) {
                 let bestEnd = text.length;
                 let bestPriority = 0;
-                let targetLength = Math.min(maxLength, text.length - currentStart);
+                let foundSentenceEnd = false;
                 
-                // 목표 길이의 80-100% 범위에서 가장 좋은 분할점 찾기
-                const minTargetLength = Math.max(minLength, Math.floor(targetLength * 0.7));
-                const maxTargetLength = targetLength;
-                
-                // 현재 위치에서 최적 분할점 찾기
+                // 1단계: 문장 종료점을 우선 탐색 (다른 조건 무시)
                 for (const bp of breakPoints) {
                     if (bp.position <= currentStart) continue;
                     
                     const segmentLength = bp.position - currentStart;
                     
-                    // 최대 길이를 초과하면 여기서 중단
-                    if (segmentLength > maxTargetLength) {
+                    // 문장 끝이면 무조건 우선 (최소 8자 이상일 때만)
+                    if (bp.type === 'sentence_end' && segmentLength >= 8) {
+                        bestEnd = bp.position;
+                        bestPriority = bp.priority;
+                        foundSentenceEnd = true;
+                        console.log(`문장 종료 발견: ${segmentLength}자에서 강제 분할`);
                         break;
                     }
                     
-                    // 목표 범위 내에서 우선순위가 높은 분할점 선택
-                    if (segmentLength >= minTargetLength && segmentLength <= maxTargetLength) {
-                        if (bp.priority > bestPriority || 
-                            (bp.priority === bestPriority && segmentLength > (bestEnd - currentStart))) {
-                            bestEnd = bp.position;
-                            bestPriority = bp.priority;
+                    // 최대 길이를 초과하면 중단
+                    if (segmentLength > maxLength) {
+                        break;
+                    }
+                }
+                
+                // 2단계: 문장 종료점이 없으면 일반 규칙 적용
+                if (!foundSentenceEnd) {
+                    let targetLength = Math.min(maxLength, text.length - currentStart);
+                    const minTargetLength = Math.max(minLength, Math.floor(targetLength * 0.7));
+                    const maxTargetLength = targetLength;
+                    
+                    for (const bp of breakPoints) {
+                        if (bp.position <= currentStart) continue;
+                        
+                        const segmentLength = bp.position - currentStart;
+                        
+                        // 최대 길이를 초과하면 중단
+                        if (segmentLength > maxTargetLength) {
+                            break;
                         }
                         
-                        // 문장 끝이면 즉시 선택 (단, 너무 짧지 않을 때)
-                        if (bp.type === 'sentence_end' && segmentLength >= minLength) {
-                            bestEnd = bp.position;
-                            bestPriority = bp.priority;
-                            break;
+                        // 목표 범위 내에서 우선순위가 높은 분할점 선택
+                        if (segmentLength >= minTargetLength && segmentLength <= maxTargetLength) {
+                            if (bp.priority > bestPriority || 
+                                (bp.priority === bestPriority && segmentLength > (bestEnd - currentStart))) {
+                                bestEnd = bp.position;
+                                bestPriority = bp.priority;
+                            }
                         }
                     }
                 }
                 
-                // 적절한 분할점을 찾지 못했으면 기존 방식과 동일하게 처리
+                // 3단계: 적절한 분할점을 찾지 못했으면 기존 방식 적용
                 if (bestEnd === text.length && (text.length - currentStart) > maxLength) {
-                    // 기존 방식: 단어 경계에서 자르기
                     const remainingText = text.substring(currentStart);
                     const words = remainingText.split(/(?<=\s)/g);
                     let accumulated = '';
@@ -667,7 +682,7 @@
         }
         
         // 기존 rebalance 함수 개선
-        function rebalance(sentArr, minLen = 14, maxLen = 25) {
+        function rebalance(sentArr, minLen = 10, maxLen = 25) {
             const out = [];
             for (let i = 0; i < sentArr.length; i++) {
                 let cur = sentArr[i];
@@ -711,15 +726,15 @@
             let sentences;
             
             if (sentenceMode === 'natural') {
-                // 자연스러운 한국어 분할 사용 (기존 방식과 동일한 파라미터)
-                sentences = naturalKoreanSegment(raw, maxCharsPerLine, 14);
+                // 자연스러운 한국어 분할 사용 (최소 글자수 10자로 완화)
+                sentences = naturalKoreanSegment(raw, maxCharsPerLine, 10);
                 console.log(`자연 분할 완료: ${sentences.length}개 자막`);
             } else {
                 // 기존 방식 사용
                 const step1 = segmentSentences(raw);
                 console.log(`2단계 문장 분할 완료: ${step1.length}개 문장`);
                 
-                sentences = rebalance(step1, 14, maxCharsPerLine);
+                sentences = rebalance(step1, 10, maxCharsPerLine);
                 console.log(`3단계 길이 보정 완료: ${sentences.length}개 자막`);
             }
             
