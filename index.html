@@ -351,8 +351,8 @@
         
         <div class="content">
             <div class="timing-mode">
-                <h4>📚 읽기 속도 기준 모드</h4>
-                <p>설정한 읽기 속도에 맞춰 자막을 생성하며, 문장의 자연스러운 끝맺음을 우선으로 합니다. 의미 단위로 끊어져 자막 작업이 편리합니다.</p>
+                <h4>📚 자연스러운 한국어 분할 모드</h4>
+                <p>한국어의 문법 구조와 의미 단위를 고려하여 자연스럽게 끊어지는 자막을 생성합니다. 조사, 어미, 연결어구 등을 분석하여 호흡이 자연스러운 지점에서 분할됩니다.</p>
             </div>
             
             <div class="settings-grid">
@@ -385,9 +385,9 @@
                     <div class="input-group">
                         <label for="sentenceMode">분할 방식</label>
                         <select id="sentenceMode">
-                            <option value="smart">스마트 분할 (권장)</option>
+                            <option value="natural">자연 분할 (권장)</option>
+                            <option value="smart">스마트 분할</option>
                             <option value="sentence">문장 우선</option>
-                            <option value="length">글자 수 우선</option>
                         </select>
                     </div>
                     <div class="input-group">
@@ -476,17 +476,161 @@
             return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
         }
         
-        // 1. 입력 전처리
+        // 입력 전처리
         function sanitize(text) {
             return text
-                .replace(/\r?\n+/g, ' ') // 줄바꿈을 공백으로
-                .replace(/\s{2,}/g, ' ') // 연속 공백 제거
+                .replace(/\r?\n+/g, ' ')
+                .replace(/\s{2,}/g, ' ')
                 .trim();
         }
         
-        // 2. 국제화 세그먼트로 1차 문장 분할
+        // 한국어 자연스러운 분할점 감지
+        function findNaturalBreakPoints(text) {
+            const breakPatterns = [
+                // 강한 분할점 (문장 종료)
+                { pattern: /[.!?。！？]/g, priority: 5, type: 'sentence_end' },
+                
+                // 중간 분할점 (절/구 경계)
+                { pattern: /[,，]/g, priority: 4, type: 'clause' },
+                { pattern: /(?<=다)\s+(?=[가-힣])/g, priority: 4, type: 'verb_end' },
+                { pattern: /(?<=요)\s+(?=[가-힣])/g, priority: 4, type: 'polite_end' },
+                { pattern: /(?<=죠)\s+(?=[가-힣])/g, priority: 4, type: 'casual_end' },
+                { pattern: /(?<=니다)\s+(?=[가-힣])/g, priority: 4, type: 'formal_end' },
+                
+                // 약한 분할점 (연결어구)
+                { pattern: /(?<=고)\s+(?=[가-힣])/g, priority: 3, type: 'connector' },
+                { pattern: /(?<=며)\s+(?=[가-힣])/g, priority: 3, type: 'connector' },
+                { pattern: /(?<=서)\s+(?=[가-힣])/g, priority: 3, type: 'connector' },
+                { pattern: /(?<=면)\s+(?=[가-힣])/g, priority: 3, type: 'conditional' },
+                { pattern: /(?<=는데)\s+(?=[가-힣])/g, priority: 3, type: 'background' },
+                { pattern: /(?<=지만)\s+(?=[가-힣])/g, priority: 3, type: 'contrast' },
+                { pattern: /(?<=거나)\s+(?=[가-힣])/g, priority: 3, type: 'alternative' },
+                
+                // 시간/순서 표현
+                { pattern: /(?<=때)\s+(?=[가-힣])/g, priority: 3, type: 'time' },
+                { pattern: /(?<=후)\s+(?=[가-힣])/g, priority: 3, type: 'sequence' },
+                { pattern: /(?<=전)\s+(?=[가-힣])/g, priority: 3, type: 'sequence' },
+                
+                // 관형절 경계
+                { pattern: /(?<=[는던은을를의이가]) +(?=[가-힣])/g, priority: 2, type: 'particle' },
+                
+                // 일반 공백 (최후 수단)
+                { pattern: /\s+/g, priority: 1, type: 'space' }
+            ];
+            
+            const breakPoints = [];
+            
+            breakPatterns.forEach(({ pattern, priority, type }) => {
+                let match;
+                while ((match = pattern.exec(text)) !== null) {
+                    breakPoints.push({
+                        position: match.index + match[0].length,
+                        priority: priority,
+                        type: type,
+                        length: match[0].length
+                    });
+                    
+                    if (!pattern.global) break;
+                }
+            });
+            
+            // 위치 순서로 정렬하고 중복 제거
+            breakPoints.sort((a, b) => a.position - b.position);
+            
+            // 같은 위치의 여러 패턴이 있으면 가장 높은 우선순위만 유지
+            const uniqueBreakPoints = [];
+            for (let i = 0; i < breakPoints.length; i++) {
+                const current = breakPoints[i];
+                const next = breakPoints[i + 1];
+                
+                if (!next || current.position !== next.position) {
+                    uniqueBreakPoints.push(current);
+                } else {
+                    // 같은 위치에 여러 패턴이 있으면 우선순위가 높은 것 선택
+                    while (i + 1 < breakPoints.length && breakPoints[i + 1].position === current.position) {
+                        if (breakPoints[i + 1].priority > current.priority) {
+                            current.priority = breakPoints[i + 1].priority;
+                            current.type = breakPoints[i + 1].type;
+                        }
+                        i++;
+                    }
+                    uniqueBreakPoints.push(current);
+                }
+            }
+            
+            return uniqueBreakPoints;
+        }
+        
+        // 자연스러운 한국어 분할
+        function naturalKoreanSegment(text, maxLength = 25, minLength = 10) {
+            console.log('=== 자연스러운 한국어 분할 시작 ===');
+            console.log(`텍스트 길이: ${text.length}자, 최대: ${maxLength}자, 최소: ${minLength}자`);
+            
+            const breakPoints = findNaturalBreakPoints(text);
+            console.log(`총 ${breakPoints.length}개의 분할점 발견`);
+            
+            const segments = [];
+            let currentStart = 0;
+            
+            while (currentStart < text.length) {
+                let bestEnd = text.length;
+                let bestPriority = 0;
+                
+                // 현재 위치에서 최대 길이 내의 가장 좋은 분할점 찾기
+                for (const bp of breakPoints) {
+                    if (bp.position <= currentStart) continue;
+                    
+                    const segmentLength = bp.position - currentStart;
+                    
+                    // 최대 길이를 초과하면 여기서 중단
+                    if (segmentLength > maxLength) {
+                        break;
+                    }
+                    
+                    // 최소 길이 이상이고 더 좋은 우선순위면 업데이트
+                    if (segmentLength >= minLength && bp.priority > bestPriority) {
+                        bestEnd = bp.position;
+                        bestPriority = bp.priority;
+                    }
+                    
+                    // 문장 끝이면 우선 선택
+                    if (bp.type === 'sentence_end' && segmentLength >= minLength) {
+                        bestEnd = bp.position;
+                        bestPriority = bp.priority;
+                        break;
+                    }
+                }
+                
+                // 적절한 분할점을 찾지 못했으면 강제로 최대 길이에서 자르기
+                if (bestEnd === text.length && (text.length - currentStart) > maxLength) {
+                    const forcedEnd = currentStart + maxLength;
+                    // 가장 가까운 공백 찾기
+                    for (let i = forcedEnd; i > currentStart + minLength; i--) {
+                        if (text[i] === ' ') {
+                            bestEnd = i;
+                            break;
+                        }
+                    }
+                    if (bestEnd === text.length) {
+                        bestEnd = forcedEnd;
+                    }
+                }
+                
+                const segment = text.substring(currentStart, bestEnd).trim();
+                if (segment) {
+                    segments.push(segment);
+                    console.log(`분할 ${segments.length}: "${segment}" (${segment.length}자)`);
+                }
+                
+                currentStart = bestEnd;
+            }
+            
+            console.log(`분할 완료: 총 ${segments.length}개 구간`);
+            return segments;
+        }
+        
+        // 기존 segmentSentences 함수 개선
         function segmentSentences(text) {
-            // Intl.Segmenter 지원 확인
             if (typeof Intl !== 'undefined' && Intl.Segmenter) {
                 try {
                     const seg = new Intl.Segmenter('ko', {granularity: 'sentence'});
@@ -498,8 +642,6 @@
                 }
             }
             
-            // 폴백: 기본 문장 부호 기준 분할
-            console.log('Intl.Segmenter 미지원, 기본 분할 방식 사용');
             return text.split(/[.!?。！？]+\s*/)
                 .map(s => s.trim())
                 .filter(Boolean)
@@ -507,31 +649,22 @@
                          s.endsWith('。') || s.endsWith('！') || s.endsWith('？') ? s : s + '.');
         }
         
-        // 3. 최소‧최대 길이 보정 로직
+        // 기존 rebalance 함수 개선
         function rebalance(sentArr, minLen = 14, maxLen = 25) {
             const out = [];
             for (let i = 0; i < sentArr.length; i++) {
                 let cur = sentArr[i];
                 
-                // 3-A. 앞 문장과 합쳐서 minLen 충족
+                // 앞 문장과 합쳐서 minLen 충족
                 while (cur.length < minLen && i + 1 < sentArr.length) {
                     cur += ' ' + sentArr[i + 1];
                     i++;
                 }
                 
-                // 3-B. 길이가 maxLen 초과면 공백 기준으로 재분할
+                // 길이가 maxLen 초과면 자연스럽게 재분할
                 if (cur.length > maxLen) {
-                    const parts = cur.split(/(?<=\s)/g); // 단어 경계
-                    let buf = '';
-                    parts.forEach(word => {
-                        if ((buf + word).length > maxLen) {
-                            out.push(buf.trim());
-                            buf = word;
-                        } else {
-                            buf += word;
-                        }
-                    });
-                    if (buf.trim()) out.push(buf.trim());
+                    const naturalSegments = naturalKoreanSegment(cur, maxLen, Math.floor(minLen * 0.8));
+                    out.push(...naturalSegments);
                 } else {
                     out.push(cur.trim());
                 }
@@ -554,18 +687,24 @@
                 return;
             }
             
-            // 4. 기존 코드에 끼워 넣기 - 새로운 분할 방식 적용
-            console.log('=== 새로운 분할 방식 시작 ===');
+            console.log('=== 개선된 분할 방식 시작 ===');
             const raw = sanitize(text);
             console.log(`1단계 전처리 완료: ${raw.length}자`);
             
-            const step1 = segmentSentences(raw);
-            console.log(`2단계 문장 분할 완료: ${step1.length}개 문장`);
-            step1.forEach((sent, i) => console.log(`  ${i+1}: "${sent}" (${sent.length}자)`));
+            let sentences;
             
-            const sentences = rebalance(step1, 14, maxCharsPerLine);
-            console.log(`3단계 길이 보정 완료: ${sentences.length}개 자막`);
-            sentences.forEach((sent, i) => console.log(`  ${i+1}: "${sent}" (${sent.length}자)`));
+            if (sentenceMode === 'natural') {
+                // 자연스러운 한국어 분할 사용
+                sentences = naturalKoreanSegment(raw, maxCharsPerLine, 12);
+                console.log(`자연 분할 완료: ${sentences.length}개 자막`);
+            } else {
+                // 기존 방식 사용
+                const step1 = segmentSentences(raw);
+                console.log(`2단계 문장 분할 완료: ${step1.length}개 문장`);
+                
+                sentences = rebalance(step1, 14, maxCharsPerLine);
+                console.log(`3단계 길이 보정 완료: ${sentences.length}개 자막`);
+            }
             
             let srtContent = '';
             let currentTime = 0;
@@ -573,21 +712,15 @@
             
             console.log(`=== SRT 생성 시작 ===`);
             console.log(`총 ${sentences.length}개 자막 생성`);
-            console.log(`읽기 속도: ${readingSpeed}자/초, 최대 글자수: ${maxCharsPerLine}자`);
             
-            // 각 문장에 대해 읽기 속도 기준으로 시간 계산
             for (let i = 0; i < sentences.length; i++) {
                 const sentence = sentences[i];
                 const charCount = sentence.length;
                 
-                // 읽기 속도 기준 기본 시간 계산
                 let duration = charCount / readingSpeed;
-                
-                // 최소/최대 시간 적용
                 duration = Math.max(duration, minDuration);
                 duration = Math.min(duration, maxDuration);
                 
-                // 짧은 문장은 조금 더 길게 표시
                 if (charCount <= 10) {
                     duration = Math.max(duration, minDuration + 0.5);
                 }
@@ -611,12 +744,10 @@
                 
                 currentTime = endTime + subtitleGap;
                 
-                console.log(`자막 ${i + 1}: "${sentence.substring(0, 15)}${sentence.length > 15 ? '...' : ''}" (${charCount}자, ${duration.toFixed(1)}초)`);
+                console.log(`자막 ${i + 1}: "${sentence.substring(0, 20)}${sentence.length > 20 ? '...' : ''}" (${charCount}자, ${duration.toFixed(1)}초)`);
             }
             
             generatedSRT = srtContent;
-            
-            // 결과 표시
             displayResults(subtitles);
         }
         
@@ -625,20 +756,17 @@
             const resultContainer = document.getElementById('resultContainer');
             const srtPreview = document.getElementById('srtPreview');
             
-            // 통계 계산
             const totalSubtitles = subtitles.length;
             const totalTime = subtitles.reduce((sum, sub) => sum + sub.duration, 0);
             const avgDuration = totalTime / totalSubtitles;
             const totalChars = subtitles.reduce((sum, sub) => sum + sub.charCount, 0);
             const actualReadingSpeed = totalChars / totalTime;
             
-            // 통계 업데이트
             document.getElementById('totalSubtitles').textContent = totalSubtitles.toLocaleString();
             document.getElementById('avgDuration').textContent = avgDuration.toFixed(1) + '초';
             document.getElementById('totalDuration').textContent = Math.floor(totalTime / 60) + '분 ' + Math.floor(totalTime % 60) + '초';
             document.getElementById('actualReadingSpeed').textContent = actualReadingSpeed.toFixed(1) + '자/초';
             
-            // 미리보기 표시
             srtPreview.textContent = generatedSRT;
             srtPreview.style.userSelect = 'text';
             srtPreview.style.cursor = 'text';
