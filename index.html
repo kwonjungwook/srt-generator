@@ -500,77 +500,124 @@
                     let splitIndex = maxLength;
                     let foundNaturalBreak = false;
                     
-                    // 균등 분할 처리: maxLength보다 큰 모든 경우에 적용 (26-35글자 포함)
-                    if (!foundNaturalBreak && currentText.length > maxLength && currentText.length <= maxLength * 1.4) {
-                        const totalLength = currentText.length;
-                        const parts = Math.ceil(totalLength / maxLength);
-                        const idealLength = Math.floor(totalLength / parts);
+                    console.log(`\n=== 분할 시작: "${currentText}" (${currentText.length}자) ===`);
+                    
+                    // 1순위: 의미 단위 우선 분할 (14자~25자 범위)
+                    if (!foundNaturalBreak && currentText.length > maxLength) {
+                        const minSplit = 14; // 최소 14자로 강화
+                        const maxSplit = maxLength; // 25자 (사용자 설정값)
                         
-                        console.log(`균등 분할 시도: 총 ${totalLength}자를 ${parts}개 부분으로 분할, 이상적 길이: ${idealLength}자`);
+                        console.log(`의미 단위 분할 시도: ${minSplit}자~${maxSplit}자 범위에서 자연스러운 분할점 찾기`);
                         
-                        // 이상적인 길이 주변에서 쉼표 찾기 (범위를 좁혀서 더 정확하게)
-                        for (let i = idealLength + 3; i >= idealLength - 3; i--) {
-                            if (i > 0 && i < currentText.length && currentText[i] === ',' && 
-                                i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
-                                splitIndex = i + 1;
-                                foundNaturalBreak = true;
-                                console.log(`쉼표에서 분할: ${i + 1}번째 위치`);
-                                break;
+                        // 1차: 완전한 문장 끝 (., !, ?) - 의미 변화가 가장 명확
+                        for (let i = maxSplit; i >= minSplit; i--) {
+                            if (i < currentText.length && sentenceEnders.test(currentText[i])) {
+                                if (i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
+                                    splitIndex = i + 1;
+                                    foundNaturalBreak = true;
+                                    console.log(`✅ 문장 끝에서 의미 단위 분할: ${i + 1}번째 위치`);
+                                    break;
+                                } else if (i + 1 === currentText.length) {
+                                    splitIndex = i + 1;
+                                    foundNaturalBreak = true;
+                                    console.log(`✅ 문장 끝(마지막)에서 분할: ${i + 1}번째 위치`);
+                                    break;
+                                }
                             }
                         }
                         
-                        // 쉼표가 없으면 공백에서 분할 (범위를 좁혀서)
+                        // 2차: 쉼표 + 공백 (절/구 단위) - 의미 변화 지점
                         if (!foundNaturalBreak) {
-                            for (let i = idealLength + 2; i >= idealLength - 2; i--) {
-                                if (i > 0 && i < currentText.length && /\s/.test(currentText[i])) {
-                                    const beforeWord = currentText.substring(Math.max(0, i-3), i).trim();
-                                    if (!/(은|는|이|가|을|를|에|의|로)$/.test(beforeWord)) {
+                            for (let i = maxSplit; i >= minSplit; i--) {
+                                if (i < currentText.length && currentText[i] === ',' && 
+                                    i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
+                                    splitIndex = i + 1;
+                                    foundNaturalBreak = true;
+                                    console.log(`✅ 쉼표에서 의미 단위 분할: ${i + 1}번째 위치`);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // 3차: 자연스러운 공백 (조사 체크 완화) - 의미 경계
+                        if (!foundNaturalBreak) {
+                            for (let i = maxSplit; i >= minSplit; i--) {
+                                if (i < currentText.length && /\s/.test(currentText[i])) {
+                                    // 조사 체크를 더 관대하게 (의미 단위 우선)
+                                    const beforeWord = currentText.substring(Math.max(0, i-4), i).trim();
+                                    const afterWord = currentText.substring(i+1, Math.min(currentText.length, i+5)).trim();
+                                    
+                                    // 극히 부자연스러운 경우만 제외
+                                    if (!/(에서만|에게만|만큼|조차|마저)$/.test(beforeWord)) {
                                         splitIndex = i;
                                         foundNaturalBreak = true;
-                                        console.log(`공백에서 분할: ${i}번째 위치`);
+                                        console.log(`✅ 자연스러운 공백에서 분할: ${i}번째 위치`);
                                         break;
                                     }
                                 }
                             }
                         }
+                        
+                        // 4차: 강제 분할 (14자 지점에서)
+                        if (!foundNaturalBreak) {
+                            splitIndex = minSplit;
+                            // 14자 지점에서 단어가 잘리지 않도록 조정
+                            while (splitIndex < maxSplit && splitIndex < currentText.length && 
+                                   !/\s/.test(currentText[splitIndex-1]) && !/\s/.test(currentText[splitIndex])) {
+                                splitIndex++;
+                            }
+                            console.log(`⚠️ 강제 분할: ${splitIndex}번째 위치 (최소 14자 보장)`);
+                        }
                     }
                     
-                    // 1순위: 문장 끝 (., !, ?, 。, ！, ？)
+                    // 2순위: 기존 문장 끝 분할 (14자 미만인 경우 대비)
                     if (!foundNaturalBreak) {
                         for (let i = Math.max(maxLength * 0.4, 8); i <= Math.min(maxLength * 1.2, currentText.length - 1); i++) {
                             if (sentenceEnders.test(currentText[i])) {
-                                // 문장 끝 다음에 공백이나 줄바꿈이 있는지 확인
                                 if (i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
                                     splitIndex = i + 1;
                                     foundNaturalBreak = true;
+                                    console.log(`✅ 기존 문장 끝 분할: ${i + 1}번째 위치`);
                                     break;
                                 } else if (i + 1 === currentText.length) {
                                     splitIndex = i + 1;
                                     foundNaturalBreak = true;
+                                    console.log(`✅ 기존 문장 끝 분할(마지막): ${i + 1}번째 위치`);
                                     break;
                                 }
                             }
                         }
                     }
                     
-                    // 2순위: 쉼표 분할 (더 적극적으로)
+                    // 3순위: 기존 쉼표 분할 (14자 미만인 경우 대비)
                     if (!foundNaturalBreak) {
-                        // 이상적인 길이 근처에서 쉼표 찾기
                         const idealRange = { start: maxLength * 0.5, end: maxLength * 1.1 };
                         
                         for (let i = Math.floor(idealRange.end); i >= Math.floor(idealRange.start); i--) {
                             if (i < currentText.length && currentText[i] === ',') {
-                                // 쉼표 다음에 공백이 있는지 확인
                                 if (i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
                                     splitIndex = i + 1;
                                     foundNaturalBreak = true;
+                                    console.log(`✅ 기존 쉼표 분할: ${i + 1}번째 위치`);
                                     break;
                                 }
                             }
                         }
                     }
                     
-                    // 3순위: 접속사나 연결어 앞에서 분할
+                    // 4순위: 다른 구두점들
+                    if (!foundNaturalBreak) {
+                        for (let i = Math.min(maxLength * 1.1, currentText.length - 1); i >= maxLength * 0.5; i--) {
+                            if (/[、，]/.test(currentText[i])) {
+                                splitIndex = i + 1;
+                                foundNaturalBreak = true;
+                                console.log(`✅ 구두점 분할: ${i + 1}번째 위치`);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 5순위: 접속사나 연결어 앞에서 분할
                     if (!foundNaturalBreak) {
                         const searchStart = Math.max(maxLength * 0.4, 5);
                         const searchEnd = Math.min(maxLength * 1.2, currentText.length);
@@ -582,53 +629,41 @@
                             if (connectorPos !== -1 && connectorPos <= maxLength * 1.2) {
                                 splitIndex = connectorPos;
                                 foundNaturalBreak = true;
+                                console.log(`✅ 접속사 분할: ${connectorPos}번째 위치`);
                             }
                         }
                     }
                     
-                    // 4순위: 다른 구두점들 (、 등)
+                    // 6순위: 기존 방식 공백 분할
                     if (!foundNaturalBreak) {
-                        for (let i = Math.min(maxLength * 1.1, currentText.length - 1); i >= maxLength * 0.5; i--) {
-                            if (/[、，]/.test(currentText[i])) {
-                                splitIndex = i + 1;
-                                foundNaturalBreak = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // 5순위: 공백 (의미 단위 고려)
-                    if (!foundNaturalBreak) {
-                        // 이상적인 길이 근처의 공백 찾기
                         for (let i = Math.min(maxLength * 0.9, currentText.length - 1); i >= maxLength * 0.5; i--) {
                             if (/\s/.test(currentText[i])) {
-                                // 공백 앞뒤 단어가 의미적으로 분리 가능한지 확인
                                 const beforeWord = currentText.substring(Math.max(0, i-5), i).trim();
                                 const afterWord = currentText.substring(i+1, Math.min(currentText.length, i+6)).trim();
                                 
-                                // 조사나 어미가 아닌 경우에만 분할
                                 if (!/(은|는|이|가|을|를|에|에서|와|과|의|로|으로)$/.test(beforeWord) && 
                                     !/(이|가|을|를|에|에서)/.test(afterWord.substring(0, 2))) {
                                     splitIndex = i;
                                     foundNaturalBreak = true;
+                                    console.log(`✅ 기존 공백 분할: ${i}번째 위치`);
                                     break;
                                 }
                             }
                         }
                     }
                     
-                    // 마지막: 강제 분할 (단어가 잘리지 않도록)
+                    // 마지막: 강제 분할
                     if (!foundNaturalBreak) {
-                        // 단어 중간에서 자르지 않도록 뒤로 이동
                         while (splitIndex > maxLength * 0.7 && splitIndex > 0 && !/\s/.test(currentText[splitIndex-1])) {
                             splitIndex--;
                         }
+                        console.log(`⚠️ 최종 강제 분할: ${splitIndex}번째 위치`);
                     }
                     
                     const part = currentText.substring(0, splitIndex).trim();
                     if (part.length > 0) {
                         result.push(part);
-                        console.log(`분할된 부분: "${part}" (${part.length}자)`);
+                        console.log(`📝 분할된 부분: "${part}" (${part.length}자)`);
                     }
                     
                     currentText = currentText.substring(splitIndex).trim();
@@ -643,10 +678,10 @@
                 
                 for (const sentence of roughSentences) {
                     const trimmed = sentence.trim();
-                    if (trimmed.length <= maxChars) {
+                    if (trimmed.length <= maxChars && trimmed.length >= 14) { // 14자 이상 제한 추가
                         sentences.push(trimmed);
                     } else {
-                        // 긴 문장은 스마트 분할
+                        // 너무 짧거나 긴 문장은 스마트 분할
                         const parts = smartSplit(trimmed, maxChars);
                         sentences.push(...parts);
                     }
@@ -660,10 +695,10 @@
                 
                 for (const sentence of roughSentences) {
                     const trimmed = sentence.trim();
-                    if (trimmed.length <= maxChars * 1.2) { // 약간의 여유 허용
+                    if (trimmed.length <= maxChars && trimmed.length >= 14) { // 14자 이상 제한 추가
                         sentences.push(trimmed);
                     } else {
-                        // 너무 긴 문장은 스마트 분할
+                        // 너무 짧거나 긴 문장은 스마트 분할
                         const parts = smartSplit(trimmed, maxChars);
                         sentences.push(...parts);
                     }
