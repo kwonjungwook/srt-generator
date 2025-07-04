@@ -372,7 +372,7 @@
                     <h3>📝 자막 설정</h3>
                     <div class="input-group">
                         <label for="maxCharsPerLine">한 줄 최대 글자 수</label>
-                        <input type="number" id="maxCharsPerLine" value="20" min="15" max="40">
+                        <input type="number" id="maxCharsPerLine" value="25" min="15" max="40">
                     </div>
                     <div class="input-group">
                         <label for="subtitleGap">자막 간 간격 (초)</label>
@@ -500,18 +500,55 @@
                     let splitIndex = maxLength;
                     let foundNaturalBreak = false;
                     
-                    // 1순위: 문장 끝 (., !, ?, 。, ！, ？) - 범위를 더 넓게
-                    for (let i = Math.max(maxLength * 0.4, 8); i <= Math.min(maxLength * 1.2, currentText.length - 1); i++) {
-                        if (sentenceEnders.test(currentText[i])) {
-                            // 문장 끝 다음에 공백이나 줄바꿈이 있는지 확인
-                            if (i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
+                    // 균등 분할 처리: maxLength보다 큰 모든 경우에 적용 (26-35글자 포함)
+                    if (!foundNaturalBreak && currentText.length > maxLength && currentText.length <= maxLength * 1.4) {
+                        const totalLength = currentText.length;
+                        const parts = Math.ceil(totalLength / maxLength);
+                        const idealLength = Math.floor(totalLength / parts);
+                        
+                        console.log(`균등 분할 시도: 총 ${totalLength}자를 ${parts}개 부분으로 분할, 이상적 길이: ${idealLength}자`);
+                        
+                        // 이상적인 길이 주변에서 쉼표 찾기 (범위를 좁혀서 더 정확하게)
+                        for (let i = idealLength + 3; i >= idealLength - 3; i--) {
+                            if (i > 0 && i < currentText.length && currentText[i] === ',' && 
+                                i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
                                 splitIndex = i + 1;
                                 foundNaturalBreak = true;
+                                console.log(`쉼표에서 분할: ${i + 1}번째 위치`);
                                 break;
-                            } else if (i + 1 === currentText.length) {
-                                splitIndex = i + 1;
-                                foundNaturalBreak = true;
-                                break;
+                            }
+                        }
+                        
+                        // 쉼표가 없으면 공백에서 분할 (범위를 좁혀서)
+                        if (!foundNaturalBreak) {
+                            for (let i = idealLength + 2; i >= idealLength - 2; i--) {
+                                if (i > 0 && i < currentText.length && /\s/.test(currentText[i])) {
+                                    const beforeWord = currentText.substring(Math.max(0, i-3), i).trim();
+                                    if (!/(은|는|이|가|을|를|에|의|로)$/.test(beforeWord)) {
+                                        splitIndex = i;
+                                        foundNaturalBreak = true;
+                                        console.log(`공백에서 분할: ${i}번째 위치`);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 1순위: 문장 끝 (., !, ?, 。, ！, ？)
+                    if (!foundNaturalBreak) {
+                        for (let i = Math.max(maxLength * 0.4, 8); i <= Math.min(maxLength * 1.2, currentText.length - 1); i++) {
+                            if (sentenceEnders.test(currentText[i])) {
+                                // 문장 끝 다음에 공백이나 줄바꿈이 있는지 확인
+                                if (i + 1 < currentText.length && /\s/.test(currentText[i + 1])) {
+                                    splitIndex = i + 1;
+                                    foundNaturalBreak = true;
+                                    break;
+                                } else if (i + 1 === currentText.length) {
+                                    splitIndex = i + 1;
+                                    foundNaturalBreak = true;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -591,6 +628,7 @@
                     const part = currentText.substring(0, splitIndex).trim();
                     if (part.length > 0) {
                         result.push(part);
+                        console.log(`분할된 부분: "${part}" (${part.length}자)`);
                     }
                     
                     currentText = currentText.substring(splitIndex).trim();
@@ -682,11 +720,11 @@
                 
                 subtitles.push({
                     index: i + 1,
-                    startTime,
-                    endTime,
+                    startTime: startTime,
+                    endTime: endTime,
                     text: sentence,
-                    duration,
-                    charCount,
+                    duration: duration,
+                    charCount: charCount,
                     actualReadingSpeed: charCount / duration
                 });
                 
