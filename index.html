@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>사연 텍스트를 SRT 자막으로 변환</title>
+    <title>사연 텍스트를 SRT 자막으로 변환 (읽기 속도 조절 버전)</title>
     <style>
         body {
             font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
@@ -36,21 +36,24 @@
             box-sizing: border-box;
         }
         .options {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
-            align-items: center;
             margin-bottom: 20px;
-            flex-wrap: wrap;
+            align-items: center;
         }
+        .options div { display: flex; flex-direction: column; }
         .options label {
             font-weight: bold;
+            margin-bottom: 5px;
         }
         .options input[type="number"] {
-            width: 80px;
+            width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 5px;
             font-size: 15px;
+            box-sizing: border-box;
         }
         button {
             background-color: #3498db;
@@ -101,128 +104,107 @@
 <body>
 
     <div class="container">
-        <h1>사연 SRT 변환기</h1>
-        
+        <h1>사연 SRT 변환기 🚀</h1>
+
         <label for="storyText" style="font-weight:bold; font-size:18px; display:block; margin-bottom:10px;">1. 사연 내용을 여기에 붙여넣으세요:</label>
         <textarea id="storyText" placeholder="이곳에 변환하고 싶은 사연 전체를 입력하세요..."></textarea>
-        
+
+        <h3 style="margin-bottom:10px;">2. 자막 옵션 설정:</h3>
         <div class="options">
-            <div>
-                <label for="duration">자막당 표시 시간(초):</label>
-                <input type="number" id="duration" value="5">
-            </div>
              <div>
-                <label for="minChars">최소 글자 수:</label>
+                <label for="cps">초당 읽기 글자 수 (CPS)</label>
+                <input type="number" id="cps" value="12" step="0.5" title="1초에 몇 글자를 읽게 할지 설정합니다. (추천: 10~15)">
+            </div>
+            <div>
+                <label for="minDuration">최소 표시 시간(초)</label>
+                <input type="number" id="minDuration" value="1.5" step="0.1" title="아무리 짧은 자막이라도 최소한 이 시간만큼은 표시됩니다.">
+            </div>
+            <div>
+                <label for="minChars">최소 글자 수</label>
                 <input type="number" id="minChars" value="70">
             </div>
             <div>
-                <label for="maxChars">최대 글자 수:</label>
+                <label for="maxChars">최대 글자 수</label>
                 <input type="number" id="maxChars" value="120">
             </div>
         </div>
-        
+
         <div class="button-group">
             <button onclick="convertToSrt()">SRT로 변환하기</button>
             <button id="downloadBtn" disabled>SRT 파일 다운로드</button>
         </div>
 
-        <h3 style="margin-top:30px;">변환 결과 미리보기:</h3>
+        <h3 style="margin-top:30px;">3. 변환 결과 미리보기:</h3>
         <pre id="srtResult">변환 버튼을 누르면 결과가 여기에 표시됩니다.</pre>
     </div>
-    
+
     <div class="footer">
-        Gemini가 제작한 사연 채널 운영자용 맞춤 도구
+        Gemini가 제작한 사연 채널 운영자용 맞춤 도구 (v2.0)
     </div>
 
     <script>
-        // SRT 다운로드 버튼 전역 변수
         const downloadBtn = document.getElementById('downloadBtn');
         let srtContent = '';
 
-        /**
-         * 초를 SRT 타임스탬프 형식(HH:MM:SS,ms)으로 변환하는 함수
-         * @param {number} totalSeconds - 총 시간(초)
-         * @returns {string} - HH:MM:SS,ms 형식의 문자열
-         */
         function formatTime(totalSeconds) {
             const hours = Math.floor(totalSeconds / 3600);
             const minutes = Math.floor((totalSeconds % 3600) / 60);
             const seconds = Math.floor(totalSeconds % 60);
             const milliseconds = Math.round((totalSeconds - Math.floor(totalSeconds)) * 1000);
-
             const pad = (num) => String(num).padStart(2, '0');
             const padMs = (num) => String(num).padStart(3, '0');
-
             return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${padMs(milliseconds)}`;
         }
 
-        /**
-         * 텍스트 덩어리를 자연스럽게 3줄로 나누는 함수
-         * @param {string} text - 3줄로 나눌 텍스트
-         * @returns {string} - 3줄로 나뉜 텍스트 (줄바꿈: \n)
-         */
         function formatToThreeLines(text) {
             const words = text.split(' ');
             if (words.length < 3) return text.replace(/\s/g, '\n');
 
             const totalLength = text.length;
-            const lineLength = totalLength / 3;
+            const targetLineLength = totalLength / 3;
             let lines = [];
-            let currentLine = '';
-            let charCount = 0;
-            let lineBreak1 = -1;
-            
-            // 첫 번째 줄바꿈 위치 찾기
+            let currentLineWords = [];
+            let lineBreakIndex1 = -1;
+
             for (let i = 0; i < words.length; i++) {
-                charCount += words[i].length + 1;
-                if (charCount > lineLength) {
-                    lineBreak1 = i;
+                currentLineWords.push(words[i]);
+                if (currentLineWords.join(' ').length >= targetLineLength) {
+                    lineBreakIndex1 = i;
                     break;
                 }
             }
-            if (lineBreak1 === -1) lineBreak1 = Math.floor(words.length / 3);
+            if (lineBreakIndex1 === -1) lineBreakIndex1 = Math.floor(words.length / 3);
+            lines.push(words.slice(0, lineBreakIndex1 + 1).join(' '));
 
-            lines.push(words.slice(0, lineBreak1 + 1).join(' '));
+            const remainingWords = words.slice(lineBreakIndex1 + 1);
+            const secondLineTargetLength = remainingWords.join(' ').length / 2;
+            currentLineWords = [];
+            let lineBreakIndex2 = -1;
 
-            // 두 번째 줄바꿈 위치 찾기
-            const remainingWords = words.slice(lineBreak1 + 1);
-            const remainingLength = remainingWords.join(' ').length;
-            const secondLineTargetLength = remainingLength / 2;
-            charCount = 0;
-            let lineBreak2 = -1;
-
-             for (let i = 0; i < remainingWords.length; i++) {
-                charCount += remainingWords[i].length + 1;
-                if (charCount > secondLineTargetLength) {
-                    lineBreak2 = i;
+            for (let i = 0; i < remainingWords.length; i++) {
+                currentLineWords.push(remainingWords[i]);
+                if (currentLineWords.join(' ').length >= secondLineTargetLength) {
+                    lineBreakIndex2 = i;
                     break;
                 }
             }
-            if (lineBreak2 === -1) lineBreak2 = Math.floor(remainingWords.length / 2);
-
-            lines.push(remainingWords.slice(0, lineBreak2 + 1).join(' '));
-            lines.push(remainingWords.slice(lineBreak2 + 1).join(' '));
+            if (lineBreakIndex2 === -1) lineBreakIndex2 = Math.floor(remainingWords.length / 2);
+            lines.push(remainingWords.slice(0, lineBreakIndex2 + 1).join(' '));
+            lines.push(remainingWords.slice(lineBreakIndex2 + 1).join(' '));
             
             return lines.filter(line => line.trim() !== '').join('\n');
         }
 
-        /**
-         * 메인 SRT 변환 함수
-         */
         function convertToSrt() {
-            const text = document.getElementById('storyText').value.trim();
-            const duration = parseFloat(document.getElementById('duration').value);
+            const text = document.getElementById('storyText').value.trim().replace(/\s+/g, ' ');
+            const cps = parseFloat(document.getElementById('cps').value);
+            const minDuration = parseFloat(document.getElementById('minDuration').value);
             const minChars = parseInt(document.getElementById('minChars').value);
             const maxChars = parseInt(document.getElementById('maxChars').value);
             
-            if (!text) {
-                alert('사연 내용을 입력해주세요.');
-                return;
-            }
-            if (isNaN(duration) || duration <= 0) {
-                alert('자막 표시 시간은 0보다 커야 합니다.');
-                return;
-            }
+            if (!text) { alert('사연 내용을 입력해주세요.'); return; }
+            if (isNaN(cps) || cps <= 0) { alert('초당 읽기 글자 수는 0보다 커야 합니다.'); return; }
+            if (isNaN(minDuration) || minDuration < 0) { alert('최소 표시 시간은 0 이상이어야 합니다.'); return; }
 
             let chunks = [];
             let currentIndex = 0;
@@ -234,19 +216,17 @@
                     chunkEnd = text.length;
                 } else {
                     let sentenceEndFound = false;
-                    // 문장 끝나는 지점 우선 검색
                     for (let i = chunkEnd; i > currentIndex + minChars; i--) {
-                        if (sentenceEnders.includes(text[i])) {
+                        if (sentenceEnders.includes(text[i]) && (text[i+1] === ' ' || i+1 === text.length)) {
                             chunkEnd = i + 1;
                             sentenceEndFound = true;
                             break;
                         }
                     }
-                    // 문장 끝을 못 찾으면 공백 기준 검색
                     if (!sentenceEndFound) {
                         let spaceIndex = text.lastIndexOf(' ', chunkEnd);
                         if (spaceIndex > currentIndex + minChars) {
-                            chunkEnd = spaceIndex + 1;
+                            chunkEnd = spaceIndex;
                         }
                     }
                 }
@@ -255,24 +235,29 @@
                 currentIndex = chunkEnd;
             }
 
-            srtContent = chunks.map((chunk, index) => {
-                const startTime = formatTime(index * duration);
-                const endTime = formatTime((index + 1) * duration);
-                const formattedText = formatToThreeLines(chunk);
-                return `${index + 1}\n${startTime} --> ${endTime}\n${formattedText}`;
-            }).join('\n\n');
+            const srtBlocks = [];
+            let currentTime = 0;
 
-            document.getElementById('srtResult').textContent = srtContent;
+            chunks.forEach((chunk, index) => {
+                if (chunk.length === 0) return;
+
+                const chunkDuration = Math.max(chunk.length / cps, minDuration);
+                const startTime = currentTime;
+                const endTime = currentTime + chunkDuration;
+                
+                const srtBlock = `${index + 1}\n${formatTime(startTime)} --> ${formatTime(endTime)}\n${formatToThreeLines(chunk)}`;
+                srtBlocks.push(srtBlock);
+                
+                currentTime = endTime;
+            });
             
-            if (srtContent) {
-                downloadBtn.disabled = false;
-            }
+            srtContent = srtBlocks.join('\n\n');
+            document.getElementById('srtResult').textContent = srtContent;
+            downloadBtn.disabled = !srtContent;
         }
 
-        // 다운로드 버튼 이벤트 리스너
         downloadBtn.addEventListener('click', () => {
             if (!srtContent) return;
-
             const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
