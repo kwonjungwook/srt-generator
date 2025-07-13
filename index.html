@@ -500,151 +500,53 @@
                 .replace(/\s{2,}/g, ' ')
                 .trim();
         }
-
-        function findNaturalBreakPoints(text) {
-            const breakPatterns = [
-                { pattern: /[.!?。！？]\s*/g, priority: 10, type: 'sentence_end' },
-                { pattern: /[,，]\s*/g, priority: 7, type: 'clause' },
-                { pattern: /(?<=[다요죠니다습니까])\s+(?=[가-힣])/g, priority: 8, type: 'sentence_break' },
-                { pattern: /(?<=[고며서면])\s+(?=[가-힣])/g, priority: 5, type: 'connector' },
-                { pattern: /(?<=는데|지만|거나|때문에|그래서|그러나|하지만)\s+(?=[가-힣])/g, priority: 6, type: 'logical_connector' },
-                { pattern: /(?<=[은는이가을를의에서와과도])\s+(?=[가-힣])/g, priority: 3, type: 'particle' },
-                { pattern: /\s+/g, priority: 1, type: 'space' }
-            ];
-            
-            const breakPoints = [];
-            
-            breakPatterns.forEach(({ pattern, priority, type }) => {
-                let match;
-                const regex = new RegExp(pattern.source, pattern.flags);
-                while ((match = regex.exec(text)) !== null) {
-                    breakPoints.push({
-                        position: match.index + match[0].length,
-                        priority: priority,
-                        type: type,
-                        length: match[0].length
-                    });
-                }
-            });
-            
-            breakPoints.sort((a, b) => a.position - b.position);
-            
-            const uniqueBreakPoints = [];
-            for (let i = 0; i < breakPoints.length; i++) {
-                const current = breakPoints[i];
-                if (i > 0 && uniqueBreakPoints[uniqueBreakPoints.length - 1].position === current.position) {
-                    if (current.priority > uniqueBreakPoints[uniqueBreakPoints.length - 1].priority) {
-                        uniqueBreakPoints[uniqueBreakPoints.length - 1] = current;
-                    }
-                } else {
-                    uniqueBreakPoints.push(current);
-                }
-            }
-            return uniqueBreakPoints;
-        }
-
-        function naturalKoreanSegment(text, maxLength = 25, minLength = 10) {
-            const breakPoints = findNaturalBreakPoints(text);
-            const segments = [];
-            let currentStart = 0;
-            
-            while (currentStart < text.length) {
-                let bestEnd = -1;
-                let bestScore = -Infinity;
-                const remainingLength = text.length - currentStart;
-
-                if (remainingLength <= maxLength) {
-                    bestEnd = text.length;
-                } else {
-                    for (const bp of breakPoints) {
-                        if (bp.position <= currentStart) continue;
-                        
-                        const segmentLength = bp.position - currentStart;
-                        if (segmentLength > maxLength * 1.2) break;
-                        
-                        let score = bp.priority * 100;
-                        score -= Math.abs(segmentLength - maxLength) * 5;
-                        
-                        if (segmentLength < minLength) score -= 100;
-                        
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestEnd = bp.position;
-                        }
-                    }
-                }
-
-                if (bestEnd === -1) {
-                    const forcedEnd = text.lastIndexOf(' ', currentStart + maxLength);
-                    bestEnd = (forcedEnd > currentStart) ? forcedEnd + 1 : currentStart + maxLength;
-                }
-                
-                const segment = text.substring(currentStart, bestEnd).trim();
-                if (segment) {
-                    segments.push(segment);
-                }
-                
-                currentStart = bestEnd;
-            }
-            return segments;
-        }
-
-   function splitIntoMultipleLines(text, maxCharsPerLine) {
-            if (text.length <= maxCharsPerLine) return [text];
-            
-            function findBestSplit(subtext, targetLength) {
-                const breakPoints = findNaturalBreakPoints(subtext);
-                let bestSplit = -1;
-                let bestScore = -Infinity;
-
-                for (const bp of breakPoints) {
-                    if (bp.position > maxCharsPerLine) continue;
-                    let score = 100 - Math.abs(bp.position - targetLength) + bp.priority * 10;
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestSplit = bp.position;
-                    }
-                }
-                return bestSplit > 0 ? bestSplit : subtext.lastIndexOf(' ', maxCharsPerLine);
-            }
-
-            const maxLines = 3; // 최대 3줄로 제한
+        
+        // ================== 로직 변경 지점 ==================
+        // 아래 splitIntoMultipleLines 함수를 새롭고 안정적인 로직으로 교체했습니다.
+        function splitIntoMultipleLines(text, maxCharsPerLine) {
             const lines = [];
-            let currentText = text;
-            
-            while (currentText.length > 0 && lines.length < maxLines) {
-                // 마지막 줄이거나 남은 텍스트가 한 줄에 들어갈 수 있으면
-                if (lines.length === maxLines - 1 || currentText.length <= maxCharsPerLine) {
-                    lines.push(currentText);
+            let remainingText = text.trim();
+            const maxLines = 3;
+
+            while (lines.length < maxLines && remainingText.length > 0) {
+                // 마지막 줄이 될 차례라면, 남은 텍스트를 모두 넣음
+                if (lines.length === maxLines - 1) {
+                    // 단, 남은 텍스트가 최대 길이를 초과하면 강제로 자르고 "…" 추가
+                    if (remainingText.length > maxCharsPerLine) {
+                        let cutPos = remainingText.lastIndexOf(' ', maxCharsPerLine);
+                        if (cutPos === -1) {
+                            cutPos = maxCharsPerLine;
+                        }
+                        lines.push(remainingText.substring(0, cutPos).trim() + '…');
+                    } else {
+                        lines.push(remainingText);
+                    }
+                    break; // 루프 종료
+                }
+
+                // 남은 텍스트 전체가 한 줄에 들어간다면, 그대로 넣고 종료
+                if (remainingText.length <= maxCharsPerLine) {
+                    lines.push(remainingText);
                     break;
                 }
+
+                // 아니라면, 최대 길이 근처의 가장 적절한 지점에서 줄을 나눔
+                // 뒤에서부터 공백을 찾아 자르는 것이 가장 안정적임
+                let splitPos = remainingText.lastIndexOf(' ', maxCharsPerLine);
                 
-                // 남은 줄 수를 고려해서 균등하게 분할
-                const remainingLines = maxLines - lines.length;
-                const targetLength = Math.floor(currentText.length / remainingLines);
-                const idealSplit = Math.min(targetLength, maxCharsPerLine);
-                
-                const splitPos = findBestSplit(currentText, idealSplit);
-                if (splitPos > 0 && splitPos < currentText.length) {
-                    lines.push(currentText.substring(0, splitPos).trim());
-                    currentText = currentText.substring(splitPos).trim();
-                } else {
-                    // 적절한 분할점을 찾지 못하면 강제로 maxCharsPerLine에서 자름
-                    const forcedSplit = currentText.lastIndexOf(' ', maxCharsPerLine);
-                    if (forcedSplit > 0) {
-                        lines.push(currentText.substring(0, forcedSplit).trim());
-                        currentText = currentText.substring(forcedSplit).trim();
-                    } else {
-                        // 공백이 없으면 전체를 한 줄로
-                        lines.push(currentText);
-                        break;
-                    }
+                // 만약 최대 길이 내에 공백이 없다면 (아주 긴 한 단어), 강제로 자름
+                if (splitPos === -1) {
+                    splitPos = maxCharsPerLine;
                 }
+                
+                lines.push(remainingText.substring(0, splitPos).trim());
+                remainingText = remainingText.substring(splitPos).trim();
             }
 
             return [lines.join('\n')];
         }
-        
+        // ================================================
+
         function segmentSentences(text) {
             if (typeof Intl !== 'undefined' && Intl.Segmenter) {
                 try {
@@ -683,7 +585,6 @@
 
             const subtitleBlocks = [];
             
-            // ================== 로직 변경 지점 ==================
             if (enableMultiLine) {
                 // 다중 줄 모드: 70~110자 기준으로 문장 그룹화
                 console.log('2단계: 다중 줄 모드 (70~110자)로 그룹화합니다.');
@@ -697,15 +598,12 @@
                         continue;
                     }
                     
-                    // 최소 길이에 도달하지 못했다면 다음 문장을 무조건 합침
                     if (currentBlock.length < minBlockLength) {
                         currentBlock += " " + sentence;
                     } 
-                    // 최소 길이를 넘었고, 다음 문장을 합쳐도 최대 길이를 넘지 않으면 합침
                     else if ((currentBlock + " " + sentence).length <= maxBlockLength) {
                         currentBlock += " " + sentence;
                     } 
-                    // 최소 길이를 넘었고, 다음 문장을 합치면 최대 길이를 초과하므로 현재 블록을 저장
                     else {
                         subtitleBlocks.push(currentBlock);
                         currentBlock = sentence;
@@ -734,13 +632,11 @@
                     subtitleBlocks.push(currentBlock);
                 }
             }
-            // ================================================
 
             console.log(`그룹화 완료: ${subtitleBlocks.length}개의 자막 블록 생성.`);
 
             let finalSubtitles = [];
             subtitleBlocks.forEach(block => {
-                // 다중 줄 활성화 여부와 관계없이, 최종 블록을 줄바꿈 처리
                  finalSubtitles.push(...splitIntoMultipleLines(block, maxCharsPerLine));
             });
             console.log(`3단계: 최종적으로 ${finalSubtitles.length}개의 자막을 생성합니다.`);
