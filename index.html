@@ -589,7 +589,7 @@
             return segments;
         }
 
-        function splitIntoMultipleLines(text, maxCharsPerLine) {
+   function splitIntoMultipleLines(text, maxCharsPerLine) {
             if (text.length <= maxCharsPerLine) return [text];
             
             function findBestSplit(subtext, targetLength) {
@@ -608,20 +608,37 @@
                 return bestSplit > 0 ? bestSplit : subtext.lastIndexOf(' ', maxCharsPerLine);
             }
 
+            const maxLines = 3; // 최대 3줄로 제한
             const lines = [];
             let currentText = text;
-            while (currentText.length > 0) {
-                if (currentText.length <= maxCharsPerLine || lines.length >= 2) {
+            
+            while (currentText.length > 0 && lines.length < maxLines) {
+                // 마지막 줄이거나 남은 텍스트가 한 줄에 들어갈 수 있으면
+                if (lines.length === maxLines - 1 || currentText.length <= maxCharsPerLine) {
                     lines.push(currentText);
                     break;
                 }
-                const splitPos = findBestSplit(currentText, currentText.length / (3 - lines.length));
-                if (splitPos > 0) {
+                
+                // 남은 줄 수를 고려해서 균등하게 분할
+                const remainingLines = maxLines - lines.length;
+                const targetLength = Math.floor(currentText.length / remainingLines);
+                const idealSplit = Math.min(targetLength, maxCharsPerLine);
+                
+                const splitPos = findBestSplit(currentText, idealSplit);
+                if (splitPos > 0 && splitPos < currentText.length) {
                     lines.push(currentText.substring(0, splitPos).trim());
                     currentText = currentText.substring(splitPos).trim();
                 } else {
-                    lines.push(currentText);
-                    break;
+                    // 적절한 분할점을 찾지 못하면 강제로 maxCharsPerLine에서 자름
+                    const forcedSplit = currentText.lastIndexOf(' ', maxCharsPerLine);
+                    if (forcedSplit > 0) {
+                        lines.push(currentText.substring(0, forcedSplit).trim());
+                        currentText = currentText.substring(forcedSplit).trim();
+                    } else {
+                        // 공백이 없으면 전체를 한 줄로
+                        lines.push(currentText);
+                        break;
+                    }
                 }
             }
 
