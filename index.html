@@ -210,42 +210,54 @@
             let currentIndex = 0;
             const sentenceEnders = ['.', '?', '!'];
 
-            while (currentIndex < text.length) {
-    let chunkEnd = currentIndex + maxChars;
-    if (chunkEnd >= text.length) {
-        chunkEnd = text.length;
-    } else {
-        let sentenceEndFound = false;
-        
-        // 1단계: maxChars 범위 내에서 문장 끝 찾기
-        for (let i = chunkEnd; i > currentIndex + minChars; i--) {
-            if (sentenceEnders.includes(text[i]) && (text[i+1] === ' ' || i+1 === text.length)) {
-                chunkEnd = i + 1;
-                sentenceEndFound = true;
-                break;
-            }
-        }
-        
-        // 2단계: 문장 끝을 못 찾았으면 maxChars + 10글자까지 확장해서 찾기
-        if (!sentenceEndFound) {
-            const extendedEnd = Math.min(currentIndex + maxChars + 10, text.length);
-            for (let i = currentIndex + maxChars; i < extendedEnd; i++) {
-                if (sentenceEnders.includes(text[i]) && (text[i+1] === ' ' || i+1 === text.length)) {
-                    chunkEnd = i + 1;
-                    sentenceEndFound = true;
-                    break;
+        while (currentIndex < text.length) {
+                let chunkEnd = currentIndex + maxChars;
+                if (chunkEnd >= text.length) {
+                    chunkEnd = text.length;
+                } else {
+                    let sentenceEndFound = false;
+                    
+                    // 1단계: maxChars - 10부터 maxChars 범위에서 문장 끝 찾기 (높은 우선순위)
+                    const preferredStart = Math.max(currentIndex + maxChars - 10, currentIndex + minChars);
+                    for (let i = chunkEnd; i >= preferredStart; i--) {
+                        if (sentenceEnders.includes(text[i]) && (text[i+1] === ' ' || i+1 === text.length)) {
+                            chunkEnd = i + 1;
+                            sentenceEndFound = true;
+                            break;
+                        }
+                    }
+                    
+                    // 2단계: 못 찾았으면 minChars부터 maxChars - 10 범위에서 문장 끝 찾기
+                    if (!sentenceEndFound) {
+                        for (let i = preferredStart - 1; i > currentIndex + minChars; i--) {
+                            if (sentenceEnders.includes(text[i]) && (text[i+1] === ' ' || i+1 === text.length)) {
+                                chunkEnd = i + 1;
+                                sentenceEndFound = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 3단계: 문장 끝을 못 찾았으면 maxChars + 10글자까지 확장해서 찾기
+                    if (!sentenceEndFound) {
+                        const extendedEnd = Math.min(currentIndex + maxChars + 10, text.length);
+                        for (let i = currentIndex + maxChars; i < extendedEnd; i++) {
+                            if (sentenceEnders.includes(text[i]) && (text[i+1] === ' ' || i+1 === text.length)) {
+                                chunkEnd = i + 1;
+                                sentenceEndFound = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 4단계: 여전히 못 찾았으면 공백으로 분할
+                    if (!sentenceEndFound) {
+                        let spaceIndex = text.lastIndexOf(' ', currentIndex + maxChars);
+                        if (spaceIndex > currentIndex + minChars) {
+                            chunkEnd = spaceIndex;
+                        }
+                    }
                 }
-            }
-        }
-        
-        // 3단계: 여전히 못 찾았으면 공백으로 분할
-        if (!sentenceEndFound) {
-            let spaceIndex = text.lastIndexOf(' ', currentIndex + maxChars);
-            if (spaceIndex > currentIndex + minChars) {
-                chunkEnd = spaceIndex;
-            }
-        }
-    }
                 
                 chunks.push(text.substring(currentIndex, chunkEnd).trim());
                 currentIndex = chunkEnd;
