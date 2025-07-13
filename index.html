@@ -413,7 +413,7 @@
                         <input type="checkbox" id="enableMultiLine">
                         <label for="enableMultiLine">다중 줄 자막 활성화</label>
                     </div>
-                    <div class="option-description">체크 시 한 자막에 최대 3줄까지 표시됩니다</div>
+                    <div class="option-description">체크 시 자막을 70~110자 사이로 길게 만듭니다</div>
                 </div>
             </div>
             
@@ -665,34 +665,66 @@
             console.log(`1단계: 전체 텍스트를 ${allSentences.length}개의 문장으로 분할했습니다.`);
 
             const subtitleBlocks = [];
-            if (allSentences.length > 0) {
-                let currentBlock = allSentences[0];
-                const maxBlockLength = maxCharsPerLine * 2.8;
+            
+            // ================== 로직 변경 지점 ==================
+            if (enableMultiLine) {
+                // 다중 줄 모드: 70~110자 기준으로 문장 그룹화
+                console.log('2단계: 다중 줄 모드 (70~110자)로 그룹화합니다.');
+                let currentBlock = "";
+                const minBlockLength = 70;
+                const maxBlockLength = 110;
 
-                for (let i = 1; i < allSentences.length; i++) {
-                    const sentence = allSentences[i];
-                    if ((currentBlock + ' ' + sentence).length > maxBlockLength && currentBlock.length > 0) {
+                for (const sentence of allSentences) {
+                    if (currentBlock === "") {
+                        currentBlock = sentence;
+                        continue;
+                    }
+                    
+                    // 최소 길이에 도달하지 못했다면 다음 문장을 무조건 합침
+                    if (currentBlock.length < minBlockLength) {
+                        currentBlock += " " + sentence;
+                    } 
+                    // 최소 길이를 넘었고, 다음 문장을 합쳐도 최대 길이를 넘지 않으면 합침
+                    else if ((currentBlock + " " + sentence).length <= maxBlockLength) {
+                        currentBlock += " " + sentence;
+                    } 
+                    // 최소 길이를 넘었고, 다음 문장을 합치면 최대 길이를 초과하므로 현재 블록을 저장
+                    else {
                         subtitleBlocks.push(currentBlock);
                         currentBlock = sentence;
-                    } else {
-                        currentBlock += ' ' + sentence;
                     }
                 }
-                subtitleBlocks.push(currentBlock);
+                if (currentBlock) {
+                    subtitleBlocks.push(currentBlock);
+                }
+
+            } else {
+                // 일반 모드: 기존 로직대로 그룹화
+                console.log('2단계: 일반 모드로 그룹화합니다.');
+                if (allSentences.length > 0) {
+                    let currentBlock = allSentences[0];
+                    const maxBlockLength = maxCharsPerLine * 2.8;
+
+                    for (let i = 1; i < allSentences.length; i++) {
+                        const sentence = allSentences[i];
+                        if ((currentBlock + ' ' + sentence).length > maxBlockLength && currentBlock.length > 0) {
+                            subtitleBlocks.push(currentBlock);
+                            currentBlock = sentence;
+                        } else {
+                            currentBlock += ' ' + sentence;
+                        }
+                    }
+                    subtitleBlocks.push(currentBlock);
+                }
             }
-            console.log(`2단계: 문장들을 ${subtitleBlocks.length}개의 자막 블록으로 그룹화했습니다.`);
+            // ================================================
+
+            console.log(`그룹화 완료: ${subtitleBlocks.length}개의 자막 블록 생성.`);
 
             let finalSubtitles = [];
             subtitleBlocks.forEach(block => {
-                if (enableMultiLine) {
-                    finalSubtitles.push(...splitIntoMultipleLines(block, maxCharsPerLine));
-                } else {
-                    if (block.length > maxCharsPerLine) {
-                        finalSubtitles.push(...naturalKoreanSegment(block, maxCharsPerLine, 10));
-                    } else {
-                        finalSubtitles.push(block);
-                    }
-                }
+                // 다중 줄 활성화 여부와 관계없이, 최종 블록을 줄바꿈 처리
+                 finalSubtitles.push(...splitIntoMultipleLines(block, maxCharsPerLine));
             });
             console.log(`3단계: 최종적으로 ${finalSubtitles.length}개의 자막을 생성합니다.`);
 
@@ -741,22 +773,22 @@
             }
             
             const totalSubtitles = subtitles.length;
-            const totalTime = subtitles.reduce((sum, sub) => sum + sub.duration, 0) + (subtitles.length -1) * parseFloat(document.getElementById('subtitleGap').value);
+            const totalDurationSeconds = subtitles.reduce((sum, sub) => sum + sub.duration, 0) + (subtitles.length > 0 ? (subtitles.length - 1) * parseFloat(document.getElementById('subtitleGap').value) : 0);
             const avgDuration = subtitles.reduce((sum, sub) => sum + sub.duration, 0) / totalSubtitles;
             const totalChars = subtitles.reduce((sum, sub) => sum + sub.charCount, 0);
             const actualReadingSpeed = totalChars / subtitles.reduce((sum, sub) => sum + sub.duration, 0);
             
             document.getElementById('totalSubtitles').textContent = totalSubtitles.toLocaleString();
-            document.getElementById('avgDuration').textContent = avgDuration.toFixed(1) + '초';
-            document.getElementById('totalDuration').textContent = Math.floor(totalTime / 60) + '분 ' + Math.floor(totalTime % 60) + '초';
-            document.getElementById('actualReadingSpeed').textContent = actualReadingSpeed.toFixed(1) + '자/초';
+            document.getElementById('avgDuration').textContent = (avgDuration || 0).toFixed(1) + '초';
+            document.getElementById('totalDuration').textContent = Math.floor(totalDurationSeconds / 60) + '분 ' + Math.floor(totalDurationSeconds % 60) + '초';
+            document.getElementById('actualReadingSpeed').textContent = (isFinite(actualReadingSpeed) ? actualReadingSpeed : 0).toFixed(1) + '자/초';
             
             srtPreview.textContent = generatedSRT;
             resultContainer.classList.remove('hidden');
             resultContainer.scrollIntoView({ behavior: 'smooth' });
             
             console.log(`=== 생성 완료 ===`);
-            console.log(`총 ${totalSubtitles}개 자막, ${Math.floor(totalTime/60)}분 ${Math.floor(totalTime%60)}초`);
+            console.log(`총 ${totalSubtitles}개 자막, ${Math.floor(totalDurationSeconds/60)}분 ${Math.floor(totalDurationSeconds%60)}초`);
         }
         
         function downloadSRT() {
@@ -783,7 +815,9 @@
                 const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
                 link.download = `subtitle_${timestamp}.srt`;
                 link.href = url;
+                document.body.appendChild(link);
                 link.click();
+                document.body.removeChild(link);
                 URL.revokeObjectURL(url);
                 alert('✅ SRT 파일이 성공적으로 다운로드되었습니다!');
             } catch (error) {
