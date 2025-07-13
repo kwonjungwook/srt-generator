@@ -3,759 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>한글 텍스트 SRT 자막 생성기</title>
+    <title>사연 텍스트를 SRT 자막으로 변환</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
+        body {
+            font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin-bottom: 20px;
             box-sizing: border-box;
         }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.2em;
-            margin-bottom: 10px;
-            font-weight: 700;
-        }
-        
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        
-        .content {
-            padding: 40px;
-        }
-        
-        .settings-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 30px;
-            margin-bottom: 40px;
-        }
-        
-        .settings-card {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 15px;
-            border: 2px solid #e9ecef;
-            transition: all 0.3s ease;
-        }
-        
-        .settings-card:hover {
-            border-color: #667eea;
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
-        }
-        
-        .settings-card h3 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            font-size: 1.3em;
+        .options {
             display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .input-group {
-            margin-bottom: 20px;
-        }
-        
-        .input-group:last-child {
-            margin-bottom: 0;
-        }
-        
-        .input-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #495057;
-        }
-        
-        .input-group input, .input-group select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            background: white;
-        }
-        
-        .input-group input:focus, .input-group select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        .textarea-container {
-            margin-bottom: 30px;
-        }
-        
-        .textarea-container label {
-            display: block;
-            margin-bottom: 10px;
-            font-weight: 600;
-            color: #2c3e50;
-            font-size: 1.1em;
-        }
-        
-        .textarea-container textarea {
-            width: 100%;
-            height: 300px;
-            padding: 20px;
-            border: 2px solid #e9ecef;
-            border-radius: 15px;
-            font-size: 16px;
-            line-height: 1.6;
-            resize: vertical;
-            transition: all 0.3s ease;
-            font-family: inherit;
-        }
-        
-        .textarea-container textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        .char-count {
-            text-align: right;
-            margin-top: 8px;
-            color: #6c757d;
-            font-size: 14px;
-        }
-        
-        .button-container {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .generate-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 18px 40px;
-            font-size: 1.2em;
-            font-weight: 600;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
-        }
-        
-        .generate-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-        }
-        
-        .generate-btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        .result-container {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 25px;
-            border: 2px solid #e9ecef;
-        }
-        
-        .result-header {
-            display: flex;
-            justify-content: space-between;
+            gap: 20px;
             align-items: center;
             margin-bottom: 20px;
-        }
-        
-        .result-header h3 {
-            color: #2c3e50;
-            font-size: 1.3em;
-        }
-        
-        .download-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        
-        .download-btn:hover {
-            background: #218838;
-            transform: translateY(-1px);
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 12px;
             flex-wrap: wrap;
         }
-        
-        .action-btn {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .options label {
+            font-weight: bold;
+        }
+        .options input[type="number"] {
+            width: 80px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 15px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-        
-        .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-        }
-        
-        .action-btn.primary {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-        }
-        
-        .action-btn.secondary {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-            color: white;
-        }
-        
-        .btn-icon {
+            padding: 12px 25px;
             font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
         }
-        
-        .srt-preview {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 10px;
+        button:hover {
+            background-color: #2980b9;
+        }
+        #downloadBtn {
+            background-color: #2ecc71;
+        }
+        #downloadBtn:hover {
+            background-color: #27ae60;
+        }
+        #downloadBtn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        pre {
+            background-color: #ecf0f1;
             padding: 20px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
             max-height: 400px;
             overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            white-space: pre-line;
+            border: 1px solid #bdc3c7;
         }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .stat-item {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            border: 1px solid #dee2e6;
-        }
-        
-        .stat-value {
-            font-size: 1.5em;
-            font-weight: 700;
-            color: #667eea;
-        }
-        
-        .stat-label {
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
-        .timing-mode {
-            background: #e8f4f8;
-            border: 2px solid #17a2b8;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .timing-mode h4 {
-            color: #0c5460;
-            margin-bottom: 10px;
+        .button-group {
             display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .timing-mode p {
-            color: #0c5460;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-
-        .option-toggle {
-            display: flex;
-            align-items: center;
             gap: 10px;
-            margin-bottom: 15px;
-            padding: 12px;
-            background: #f1f3f4;
-            border-radius: 8px;
-            border: 1px solid #e0e0e0;
+            margin-top: 20px;
         }
-        
-        .option-toggle input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-        
-        .option-toggle label {
-            cursor: pointer;
-            font-weight: 500;
-            color: #333;
-            margin: 0;
-        }
-        
-        .option-description {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-            line-height: 1.3;
-        }
-        
-        @media (max-width: 768px) {
-            .settings-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .header h1 {
-                font-size: 1.8em;
-            }
-            
-            .content {
-                padding: 20px;
-            }
-            
-            .button-group {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .action-btn {
-                justify-content: center;
-                width: 100%;
-            }
+         .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 14px;
+            color: #7f8c8d;
         }
     </style>
 </head>
 <body>
+
     <div class="container">
-        <div class="header">
-            <h1>🎬 한글 텍스트 SRT 자막 생성기</h1>
-            <p>대량의 한글 텍스트를 자연스러운 문장 단위로 SRT 자막 파일 변환</p>
+        <h1>사연 SRT 변환기</h1>
+        
+        <label for="storyText" style="font-weight:bold; font-size:18px; display:block; margin-bottom:10px;">1. 사연 내용을 여기에 붙여넣으세요:</label>
+        <textarea id="storyText" placeholder="이곳에 변환하고 싶은 사연 전체를 입력하세요..."></textarea>
+        
+        <div class="options">
+            <div>
+                <label for="duration">자막당 표시 시간(초):</label>
+                <input type="number" id="duration" value="5">
+            </div>
+             <div>
+                <label for="minChars">최소 글자 수:</label>
+                <input type="number" id="minChars" value="70">
+            </div>
+            <div>
+                <label for="maxChars">최대 글자 수:</label>
+                <input type="number" id="maxChars" value="120">
+            </div>
         </div>
         
-        <div class="content">
-            <div class="timing-mode">
-                <h4>📚 문장 단위 자막 생성</h4>
-                <p>입력된 텍스트를 문장 단위(마침표, 느낌표 등)로 먼저 나눈 후, 자막 길이에 맞춰 생성합니다. 문장이 중간에 잘리는 현상 없이 자연스러운 자막을 보장합니다.</p>
-            </div>
-            
-            <div class="settings-grid">
-                <div class="settings-card">
-                    <h3>📖 읽기 설정</h3>
-                    <div class="input-group">
-                        <label for="readingSpeed">읽기 속도 (자/초)</label>
-                        <input type="number" id="readingSpeed" value="6.5" min="3" max="8" step="0.5">
-                    </div>
-                    <div class="input-group">
-                        <label for="minDuration">최소 표시 시간 (초)</label>
-                        <input type="number" id="minDuration" value="2" min="1" max="5" step="0.5">
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>📝 자막 설정</h3>
-                    <div class="input-group">
-                        <label for="maxCharsPerLine">한 줄 최대 글자 수</label>
-                        <input type="number" id="maxCharsPerLine" value="25" min="15" max="40">
-                    </div>
-                    <div class="input-group">
-                        <label for="subtitleGap">자막 간 간격 (초)</label>
-                        <input type="number" id="subtitleGap" value="0" min="0" max="2" step="0.1">
-                    </div>
-                    <div class="option-toggle">
-                        <input type="checkbox" id="enableMultiLine">
-                        <label for="enableMultiLine">다중 줄 자막 활성화</label>
-                    </div>
-                    <div class="option-description">체크 시 자막을 70~110자 사이로 길게 만듭니다</div>
-                </div>
-            </div>
-            
-            <div class="textarea-container">
-                <label for="inputText">변환할 텍스트를 입력하세요</label>
-                <textarea id="inputText" placeholder="여기에 자막으로 만들 텍스트를 붙여넣으세요..."></textarea>
-                <div class="char-count">
-                    <span id="charCount">0</span>자
-                </div>
-            </div>
-            
-            <div class="button-container">
-                <button class="generate-btn" onclick="generateSRT()">🎬 SRT 파일 생성</button>
-            </div>
-            
-            <div id="resultContainer" class="result-container hidden">
-                <div class="result-header">
-                    <h3>📊 생성 결과</h3>
-                    <div class="button-group">
-                        <button class="action-btn primary" onclick="downloadSRT()">
-                            <span class="btn-icon">📥</span>
-                            SRT 파일 다운로드
-                        </button>
-                        <button class="action-btn secondary" onclick="copySRT()">
-                            <span class="btn-icon">📋</span>
-                            텍스트 복사
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="stats">
-                    <div class="stat-item">
-                        <div class="stat-value" id="totalSubtitles">0</div>
-                        <div class="stat-label">총 자막 수</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="avgDuration">0초</div>
-                        <div class="stat-label">평균 표시 시간</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="totalDuration">0분</div>
-                        <div class="stat-label">총 길이</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="actualReadingSpeed">0자/초</div>
-                        <div class="stat-label">실제 읽기속도</div>
-                    </div>
-                </div>
-                
-                <div class="srt-preview" id="srtPreview"></div>
-                
-                <div style="margin-top: 15px; padding: 15px; background: #e7f3ff; border-radius: 10px; border-left: 4px solid #007bff;">
-                    <strong>💡 사용 방법:</strong><br>
-                    1️⃣ <strong>"📋 텍스트 복사"</strong> 버튼 클릭<br>
-                    2️⃣ <strong>메모장</strong> 열기<br>
-                    3️⃣ <strong>Ctrl+V</strong>로 붙여넣기<br>
-                    4️⃣ <strong>"subtitle.srt"</strong>로 저장
-                </div>
-            </div>
+        <div class="button-group">
+            <button onclick="convertToSrt()">SRT로 변환하기</button>
+            <button id="downloadBtn" disabled>SRT 파일 다운로드</button>
         </div>
+
+        <h3 style="margin-top:30px;">변환 결과 미리보기:</h3>
+        <pre id="srtResult">변환 버튼을 누르면 결과가 여기에 표시됩니다.</pre>
+    </div>
+    
+    <div class="footer">
+        Gemini가 제작한 사연 채널 운영자용 맞춤 도구
     </div>
 
     <script>
-        let generatedSRT = '';
-        let isDownloading = false;
-        
-        document.getElementById('inputText').addEventListener('input', function() {
-            const count = this.value.length;
-            document.getElementById('charCount').textContent = count.toLocaleString();
-        });
-        
-        function formatTime(seconds) {
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = Math.floor(seconds % 60);
-            const ms = Math.floor((seconds % 1) * 1000);
+        // SRT 다운로드 버튼 전역 변수
+        const downloadBtn = document.getElementById('downloadBtn');
+        let srtContent = '';
+
+        /**
+         * 초를 SRT 타임스탬프 형식(HH:MM:SS,ms)으로 변환하는 함수
+         * @param {number} totalSeconds - 총 시간(초)
+         * @returns {string} - HH:MM:SS,ms 형식의 문자열
+         */
+        function formatTime(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = Math.floor(totalSeconds % 60);
+            const milliseconds = Math.round((totalSeconds - Math.floor(totalSeconds)) * 1000);
+
+            const pad = (num) => String(num).padStart(2, '0');
+            const padMs = (num) => String(num).padStart(3, '0');
+
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${padMs(milliseconds)}`;
+        }
+
+        /**
+         * 텍스트 덩어리를 자연스럽게 3줄로 나누는 함수
+         * @param {string} text - 3줄로 나눌 텍스트
+         * @returns {string} - 3줄로 나뉜 텍스트 (줄바꿈: \n)
+         */
+        function formatToThreeLines(text) {
+            const words = text.split(' ');
+            if (words.length < 3) return text.replace(/\s/g, '\n');
+
+            const totalLength = text.length;
+            const lineLength = totalLength / 3;
+            let lines = [];
+            let currentLine = '';
+            let charCount = 0;
+            let lineBreak1 = -1;
             
-            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
-        }
-        
-        function sanitize(text) {
-            return text
-                .replace(/\r?\n+/g, ' ')
-                .replace(/\s{2,}/g, ' ')
-                .trim();
-        }
-        
-        // ================== 로직 변경 지점 ==================
-        // 아래 splitIntoMultipleLines 함수를 새롭고 안정적인 로직으로 교체했습니다.
-        function splitIntoMultipleLines(text, maxCharsPerLine) {
-            const lines = [];
-            let remainingText = text.trim();
-            const maxLines = 3;
-
-            while (lines.length < maxLines && remainingText.length > 0) {
-                // 마지막 줄이 될 차례라면, 남은 텍스트를 모두 넣음
-                if (lines.length === maxLines - 1) {
-                    // 단, 남은 텍스트가 최대 길이를 초과하면 강제로 자르고 "…" 추가
-                    if (remainingText.length > maxCharsPerLine) {
-                        let cutPos = remainingText.lastIndexOf(' ', maxCharsPerLine);
-                        if (cutPos === -1) {
-                            cutPos = maxCharsPerLine;
-                        }
-                        lines.push(remainingText.substring(0, cutPos).trim() + '…');
-                    } else {
-                        lines.push(remainingText);
-                    }
-                    break; // 루프 종료
-                }
-
-                // 남은 텍스트 전체가 한 줄에 들어간다면, 그대로 넣고 종료
-                if (remainingText.length <= maxCharsPerLine) {
-                    lines.push(remainingText);
+            // 첫 번째 줄바꿈 위치 찾기
+            for (let i = 0; i < words.length; i++) {
+                charCount += words[i].length + 1;
+                if (charCount > lineLength) {
+                    lineBreak1 = i;
                     break;
                 }
-
-                // 아니라면, 최대 길이 근처의 가장 적절한 지점에서 줄을 나눔
-                // 뒤에서부터 공백을 찾아 자르는 것이 가장 안정적임
-                let splitPos = remainingText.lastIndexOf(' ', maxCharsPerLine);
-                
-                // 만약 최대 길이 내에 공백이 없다면 (아주 긴 한 단어), 강제로 자름
-                if (splitPos === -1) {
-                    splitPos = maxCharsPerLine;
-                }
-                
-                lines.push(remainingText.substring(0, splitPos).trim());
-                remainingText = remainingText.substring(splitPos).trim();
             }
+            if (lineBreak1 === -1) lineBreak1 = Math.floor(words.length / 3);
 
-            return [lines.join('\n')];
-        }
-        // ================================================
+            lines.push(words.slice(0, lineBreak1 + 1).join(' '));
 
-        function segmentSentences(text) {
-            if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-                try {
-                    const seg = new Intl.Segmenter('ko', {granularity: 'sentence'});
-                    return [...seg.segment(text)]
-                        .map(s => s.segment.trim())
-                        .filter(Boolean);
-                } catch (error) {
-                    console.log('Intl.Segmenter 사용 실패, 기본 분할 방식 사용:', error);
+            // 두 번째 줄바꿈 위치 찾기
+            const remainingWords = words.slice(lineBreak1 + 1);
+            const remainingLength = remainingWords.join(' ').length;
+            const secondLineTargetLength = remainingLength / 2;
+            charCount = 0;
+            let lineBreak2 = -1;
+
+             for (let i = 0; i < remainingWords.length; i++) {
+                charCount += remainingWords[i].length + 1;
+                if (charCount > secondLineTargetLength) {
+                    lineBreak2 = i;
+                    break;
                 }
             }
+            if (lineBreak2 === -1) lineBreak2 = Math.floor(remainingWords.length / 2);
+
+            lines.push(remainingWords.slice(0, lineBreak2 + 1).join(' '));
+            lines.push(remainingWords.slice(lineBreak2 + 1).join(' '));
             
-            return text.split(/(?<=[.!?。！？])\s*/)
-                .map(s => s.trim())
-                .filter(Boolean);
+            return lines.filter(line => line.trim() !== '').join('\n');
         }
-        
-        function generateSRT() {
-            const text = document.getElementById('inputText').value.trim();
-            const readingSpeed = parseFloat(document.getElementById('readingSpeed').value);
-            const maxCharsPerLine = parseInt(document.getElementById('maxCharsPerLine').value);
-            const subtitleGap = parseFloat(document.getElementById('subtitleGap').value);
-            const minDuration = parseFloat(document.getElementById('minDuration').value);
-            const enableMultiLine = document.getElementById('enableMultiLine').checked;
 
+        /**
+         * 메인 SRT 변환 함수
+         */
+        function convertToSrt() {
+            const text = document.getElementById('storyText').value.trim();
+            const duration = parseFloat(document.getElementById('duration').value);
+            const minChars = parseInt(document.getElementById('minChars').value);
+            const maxChars = parseInt(document.getElementById('maxChars').value);
+            
             if (!text) {
-                alert('텍스트를 입력해주세요.');
+                alert('사연 내용을 입력해주세요.');
+                return;
+            }
+            if (isNaN(duration) || duration <= 0) {
+                alert('자막 표시 시간은 0보다 커야 합니다.');
                 return;
             }
 
-            console.log('=== 문장 단위 자막 생성 시작 ===');
+            let chunks = [];
+            let currentIndex = 0;
+            const sentenceEnders = ['.', '?', '!'];
 
-            const raw = sanitize(text);
-            const allSentences = segmentSentences(raw);
-            console.log(`1단계: 전체 텍스트를 ${allSentences.length}개의 문장으로 분할했습니다.`);
-
-            const subtitleBlocks = [];
-            
-            if (enableMultiLine) {
-                // 다중 줄 모드: 70~110자 기준으로 문장 그룹화
-                console.log('2단계: 다중 줄 모드 (70~110자)로 그룹화합니다.');
-                let currentBlock = "";
-                const minBlockLength = 70;
-                const maxBlockLength = 110;
-
-                for (const sentence of allSentences) {
-                    if (currentBlock === "") {
-                        currentBlock = sentence;
-                        continue;
-                    }
-                    
-                    if (currentBlock.length < minBlockLength) {
-                        currentBlock += " " + sentence;
-                    } 
-                    else if ((currentBlock + " " + sentence).length <= maxBlockLength) {
-                        currentBlock += " " + sentence;
-                    } 
-                    else {
-                        subtitleBlocks.push(currentBlock);
-                        currentBlock = sentence;
-                    }
-                }
-                if (currentBlock) {
-                    subtitleBlocks.push(currentBlock);
-                }
-
-            } else {
-                // 일반 모드: 기존 로직대로 그룹화
-                console.log('2단계: 일반 모드로 그룹화합니다.');
-                if (allSentences.length > 0) {
-                    let currentBlock = allSentences[0];
-                    const maxBlockLength = maxCharsPerLine * 2.8;
-
-                    for (let i = 1; i < allSentences.length; i++) {
-                        const sentence = allSentences[i];
-                        if ((currentBlock + ' ' + sentence).length > maxBlockLength && currentBlock.length > 0) {
-                            subtitleBlocks.push(currentBlock);
-                            currentBlock = sentence;
-                        } else {
-                            currentBlock += ' ' + sentence;
+            while (currentIndex < text.length) {
+                let chunkEnd = currentIndex + maxChars;
+                if (chunkEnd >= text.length) {
+                    chunkEnd = text.length;
+                } else {
+                    let sentenceEndFound = false;
+                    // 문장 끝나는 지점 우선 검색
+                    for (let i = chunkEnd; i > currentIndex + minChars; i--) {
+                        if (sentenceEnders.includes(text[i])) {
+                            chunkEnd = i + 1;
+                            sentenceEndFound = true;
+                            break;
                         }
                     }
-                    subtitleBlocks.push(currentBlock);
+                    // 문장 끝을 못 찾으면 공백 기준 검색
+                    if (!sentenceEndFound) {
+                        let spaceIndex = text.lastIndexOf(' ', chunkEnd);
+                        if (spaceIndex > currentIndex + minChars) {
+                            chunkEnd = spaceIndex + 1;
+                        }
+                    }
                 }
+                
+                chunks.push(text.substring(currentIndex, chunkEnd).trim());
+                currentIndex = chunkEnd;
             }
 
-            console.log(`그룹화 완료: ${subtitleBlocks.length}개의 자막 블록 생성.`);
+            srtContent = chunks.map((chunk, index) => {
+                const startTime = formatTime(index * duration);
+                const endTime = formatTime((index + 1) * duration);
+                const formattedText = formatToThreeLines(chunk);
+                return `${index + 1}\n${startTime} --> ${endTime}\n${formattedText}`;
+            }).join('\n\n');
 
-            let finalSubtitles = [];
-            subtitleBlocks.forEach(block => {
-                 finalSubtitles.push(...splitIntoMultipleLines(block, maxCharsPerLine));
-            });
-            console.log(`3단계: 최종적으로 ${finalSubtitles.length}개의 자막을 생성합니다.`);
-
-            let srtContent = '';
-            let currentTime = 0;
-            const subtitles = [];
-
-            for (let i = 0; i < finalSubtitles.length; i++) {
-                const sentence = finalSubtitles[i];
-                const charCount = sentence.replace(/\n/g, '').length;
-
-                let duration = charCount / readingSpeed;
-                duration = Math.max(duration, minDuration);
-
-                const startTime = currentTime;
-                const endTime = currentTime + duration;
-
-                subtitles.push({
-                    index: i + 1,
-                    startTime: startTime,
-                    endTime: endTime,
-                    text: sentence,
-                    duration: duration,
-                    charCount: charCount,
-                    actualReadingSpeed: charCount / duration
-                });
-
-                srtContent += `${i + 1}\n`;
-                srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
-                srtContent += `${sentence}\n\n`;
-
-                currentTime = endTime + subtitleGap;
-            }
-
-            generatedSRT = srtContent;
-            displayResults(subtitles);
-        }
-        
-        function displayResults(subtitles) {
-            const resultContainer = document.getElementById('resultContainer');
-            const srtPreview = document.getElementById('srtPreview');
+            document.getElementById('srtResult').textContent = srtContent;
             
-            if (subtitles.length === 0) {
-                resultContainer.classList.add('hidden');
-                return;
-            }
-            
-            const totalSubtitles = subtitles.length;
-            const totalDurationSeconds = subtitles.reduce((sum, sub) => sum + sub.duration, 0) + (subtitles.length > 0 ? (subtitles.length - 1) * parseFloat(document.getElementById('subtitleGap').value) : 0);
-            const avgDuration = subtitles.reduce((sum, sub) => sum + sub.duration, 0) / totalSubtitles;
-            const totalChars = subtitles.reduce((sum, sub) => sum + sub.charCount, 0);
-            const actualReadingSpeed = totalChars / subtitles.reduce((sum, sub) => sum + sub.duration, 0);
-            
-            document.getElementById('totalSubtitles').textContent = totalSubtitles.toLocaleString();
-            document.getElementById('avgDuration').textContent = (avgDuration || 0).toFixed(1) + '초';
-            document.getElementById('totalDuration').textContent = Math.floor(totalDurationSeconds / 60) + '분 ' + Math.floor(totalDurationSeconds % 60) + '초';
-            document.getElementById('actualReadingSpeed').textContent = (isFinite(actualReadingSpeed) ? actualReadingSpeed : 0).toFixed(1) + '자/초';
-            
-            srtPreview.textContent = generatedSRT;
-            resultContainer.classList.remove('hidden');
-            resultContainer.scrollIntoView({ behavior: 'smooth' });
-            
-            console.log(`=== 생성 완료 ===`);
-            console.log(`총 ${totalSubtitles}개 자막, ${Math.floor(totalDurationSeconds/60)}분 ${Math.floor(totalDurationSeconds%60)}초`);
-        }
-        
-        function downloadSRT() {
-            if (isDownloading) return;
-            if (!generatedSRT) {
-                alert('먼저 SRT 파일을 생성해주세요.');
-                return;
-            }
-            
-            const downloadButton = document.querySelector('.action-btn.primary');
-            const originalText = downloadButton.innerHTML;
-            
-            isDownloading = true;
-            downloadButton.disabled = true;
-            downloadButton.innerHTML = '<span class="btn-icon">⏳</span>다운로드 중...';
-            
-            try {
-                const bom = '\uFEFF';
-                const content = bom + generatedSRT;
-                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                const now = new Date();
-                const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-                link.download = `subtitle_${timestamp}.srt`;
-                link.href = url;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                alert('✅ SRT 파일이 성공적으로 다운로드되었습니다!');
-            } catch (error) {
-                console.error('다운로드 오류:', error);
-                alert('❌ 다운로드에 실패했습니다. "📋 텍스트 복사" 버튼을 사용해주세요.');
-            } finally {
-                isDownloading = false;
-                downloadButton.disabled = false;
-                downloadButton.innerHTML = originalText;
+            if (srtContent) {
+                downloadBtn.disabled = false;
             }
         }
-        
-        function copySRT() {
-            if (!generatedSRT) {
-                alert('먼저 SRT 파일을 생성해주세요.');
-                return;
-            }
-            
-            navigator.clipboard.writeText(generatedSRT).then(() => {
-                alert('✅ SRT 내용이 클립보드에 복사되었습니다!\n\n📝 사용 방법:\n1️⃣ 메모장 열기\n2️⃣ Ctrl+V로 붙여넣기\n3️⃣ "subtitle.srt"로 저장');
-            }).catch(err => {
-                console.error('클립보드 복사 실패:', err);
-                alert('❌ 복사에 실패했습니다. 미리보기 영역에서 직접 복사해주세요.');
-            });
-        }
+
+        // 다운로드 버튼 이벤트 리스너
+        downloadBtn.addEventListener('click', () => {
+            if (!srtContent) return;
+
+            const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'story.srt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
     </script>
 </body>
 </html>
